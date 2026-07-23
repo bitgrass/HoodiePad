@@ -107,6 +107,8 @@ async function startFork() {
     String(product.network.chainId),
     "--port",
     String(LOCAL_PORT),
+    "--block-time",
+    "1",
     "--silent",
   ];
   const pinnedBlock = process.env.HOODIEPAD_FORK_BLOCK?.trim();
@@ -223,6 +225,7 @@ async function main() {
     );
 
     const block = await publicClient.getBlock();
+    process.stdout.write(`Fork ready at block ${block.number}\n`);
     report.forkBlock = block.number.toString();
     report.referenceTick = chainStatus.referencePool.tick;
     const built = buildStaticLaunchParams(
@@ -244,9 +247,11 @@ async function main() {
       walletClient: creatorWallet,
       chainId: product.network.chainId,
     });
+    process.stdout.write("Creating the exact HoodiePad launch on the fork...\n");
     const launch = await sdk.factory.simulateCreateStaticAuction(built.params);
     const executed = await launch.execute();
     await publicClient.waitForTransactionReceipt({ hash: executed.transactionHash as Hex });
+    process.stdout.write("Launch created; validating token and locked pool...\n");
     addCheck(
       checks,
       "launch-created",
@@ -406,6 +411,7 @@ async function main() {
       return publicClient.waitForTransactionReceipt({ hash });
     };
 
+    process.stdout.write("Executing fork buy and maximum-wallet rejection...\n");
     await exactOutputSwap(tenMillionTokens, firstInput * 101n / 100n + 1n);
     const firstBalance = await tokenEntity.getBalanceOf(buyer.address);
     addCheck(checks, "buy", firstBalance === tenMillionTokens, `${firstBalance} wei received`);
@@ -424,6 +430,7 @@ async function main() {
       `balance remained ${cappedBalance}`,
     );
 
+    process.stdout.write("Advancing fork time beyond the 24-hour wallet limit...\n");
     await testClient.increaseTime({
       seconds: product.token.maxWalletDurationSeconds + 1,
     });
@@ -442,6 +449,7 @@ async function main() {
       `balance ${expiredBalance}`,
     );
 
+    process.stdout.write("Executing reverse sell...\n");
     await approveTokenForRouter(token);
     const exactInputQuote = await publicClient.simulateContract({
       account: buyer.address,
@@ -479,6 +487,7 @@ async function main() {
       `balance ${balanceAfterSell}`,
     );
 
+    process.stdout.write("Collecting and validating the 80/15/5 fee split...\n");
     const beneficiaries = [
       creator.address,
       product.contracts.hoodieEcosystemSafe as Address,
@@ -534,6 +543,7 @@ async function main() {
       `HOODIE ${hoodieDeltas.join("/")}; token ${tokenDeltas.join("/")}`,
     );
 
+    process.stdout.write("Proving locked liquidity cannot exit...\n");
     let exitRejected = false;
     try {
       await publicClient.simulateContract({
