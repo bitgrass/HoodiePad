@@ -19,6 +19,7 @@ import {
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import {
+  DEAD_ADDRESS,
   DopplerSDK,
   getAddresses,
   lockableUniswapV3InitializerAbi,
@@ -308,13 +309,25 @@ async function main() {
     );
 
     const tokenEntity = sdk.getDopplerERC20V1(token);
-    const [maxBalance, balanceLimitEnd, balanceLimitActive, controller, tokenPool] =
+    const [
+      maxBalance,
+      balanceLimitEnd,
+      balanceLimitActive,
+      controller,
+      tokenPool,
+      tokenPoolLocked,
+      canonicalPoolExcluded,
+      noOpPoolExcluded,
+    ] =
       await Promise.all([
         tokenEntity.getMaxBalanceLimit(),
         tokenEntity.getBalanceLimitEnd(),
         tokenEntity.isBalanceLimitActive(),
         tokenEntity.getController(),
         tokenEntity.getPool(),
+        tokenEntity.isPoolLocked(),
+        tokenEntity.isExcludedFromBalanceLimit(pool),
+        tokenEntity.isExcludedFromBalanceLimit(DEAD_ADDRESS),
       ]);
     const expectedMaxBalance = parseEther(product.token.maxWalletTokens);
     const expectedBalanceLimitEnd =
@@ -324,7 +337,10 @@ async function main() {
       balanceLimitEnd === expectedBalanceLimitEnd &&
       balanceLimitActive &&
       controller.toLowerCase() === product.token.controller.toLowerCase() &&
-      tokenPool.toLowerCase() === pool.toLowerCase();
+      tokenPool.toLowerCase() === DEAD_ADDRESS.toLowerCase() &&
+      tokenPoolLocked &&
+      canonicalPoolExcluded &&
+      noOpPoolExcluded;
     addCheck(
       checks,
       "token-policy",
@@ -334,7 +350,10 @@ async function main() {
         `balanceLimitEnd ${balanceLimitEnd} expected ${expectedBalanceLimitEnd}`,
         `active ${balanceLimitActive}`,
         `controller ${controller} expected ${product.token.controller}`,
-        `pool ${tokenPool} expected ${pool}`,
+        `locked pool sentinel ${tokenPool} expected ${DEAD_ADDRESS}`,
+        `pool lock active ${tokenPoolLocked}`,
+        `canonical V3 pool excluded ${canonicalPoolExcluded}`,
+        `NoOp pool sentinel excluded ${noOpPoolExcluded}`,
       ].join("; "),
     );
 
