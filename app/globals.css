@@ -362,6 +362,10 @@ button { color: inherit; }
 .status-chip.is-warning { background: #ffd5a3; }
 .launch-confirmed-banner { margin-top: 24px; padding: 13px 16px; display: flex; justify-content: space-between; gap: 15px; border: 1.5px solid #587929; border-radius: 8px; background: var(--acid-soft); font-size: 10px; }
 .launch-confirmed-banner a, .token-links a, .token-identity a { color: inherit; font-weight: 850; }
+.market-activation-banner { margin-top: 24px; padding: 16px; display: flex; align-items: center; justify-content: space-between; gap: 18px; border: 1.5px solid #a26818; border-radius: 9px; background: #fff0d7; }
+.market-activation-banner strong { font-size: 12px; }
+.market-activation-banner p { max-width: 670px; margin: 5px 0 0; color: #69502f; font-size: 10px; line-height: 1.5; }
+.market-activation-banner a { flex: 0 0 auto; padding: 9px 11px; border: 1px solid var(--ink); border-radius: 6px; background: var(--paper); color: inherit; font-size: 9px; font-weight: 900; }
 .token-description { max-width: 720px; margin: 24px 0 0; color: var(--muted); font-size: 13px; line-height: 1.65; }
 .token-links { display: flex; gap: 16px; margin-top: 14px; font-size: 10px; text-decoration: underline; }
 .token-unavailable { max-width: 720px; margin: 45px 0 100px; padding: 30px; border: 2px solid var(--ink); border-radius: 15px; background: var(--paper); box-shadow: 5px 5px 0 var(--ink); }
@@ -429,6 +433,7 @@ button { color: inherit; }
   .launch-studio { grid-template-columns: 150px 1fr; }
   .launch-preview { display: none; }
   .token-layout { grid-template-columns: 1fr; }
+  .market-activation-banner { align-items: flex-start; flex-direction: column; }
   .trade-panel { width: 100%; }
 }
 

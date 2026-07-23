@@ -108,6 +108,10 @@ Then complete these checks:
 7. Confirm the launch UI changes from submitted to confirmed, then opens the
    real `/token/<address>?tx=<hash>` page. Check that its token, pool, supply,
    fee, lock status, and metadata match Blockscout.
+8. A newly initialized single-sided pool can be traded immediately through its
+   canonical Uniswap pool URL, but token search and DEX indexers may not list it
+   until the first swap. HoodiePad labels this state `Pool ready` and changes it
+   to `Market active` after cumulative V3 fee growth proves a swap occurred.
 
 ## 5. Rollback and operations
 

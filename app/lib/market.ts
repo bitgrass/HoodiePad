@@ -6,6 +6,7 @@ import {
 import {
   formatUnits,
   getAddress,
+  parseAbi,
   type Address,
 } from "viem";
 import product from "../../config/hoodiepad-v1.json";
@@ -17,6 +18,10 @@ import { createRobinhoodPublicClient } from "./protocol";
 
 const metadataKeyPattern = /^token-metadata\/[a-f0-9]{64}\.json$/;
 const artworkKeyPattern = /^token-artwork\/[a-f0-9]{64}\.(jpg|png|webp)$/;
+const poolActivityAbi = parseAbi([
+  "function feeGrowthGlobal0X128() view returns (uint256)",
+  "function feeGrowthGlobal1X128() view returns (uint256)",
+]);
 
 type TokenMetadata = {
   name?: unknown;
@@ -48,6 +53,7 @@ export type HoodiePadMarket = {
   pool: Address;
   poolFee: number;
   poolLiquidity: string;
+  hasSwapActivity: boolean;
   tick: number;
   hoodiePerToken: string;
   maxBalance: string;
@@ -153,12 +159,22 @@ export async function readHoodiePadMarket(
   ]);
 
   const pool = getAddress(assetData[5]);
-  const [token0, token1, poolFee, poolLiquidity, slot0] = await Promise.all([
+  const [
+    token0,
+    token1,
+    poolFee,
+    poolLiquidity,
+    slot0,
+    feeGrowthToken,
+    feeGrowthHoodie,
+  ] = await Promise.all([
     client.readContract({ address: pool, abi: uniswapV3PoolAbi, functionName: "token0" }),
     client.readContract({ address: pool, abi: uniswapV3PoolAbi, functionName: "token1" }),
     client.readContract({ address: pool, abi: uniswapV3PoolAbi, functionName: "fee" }),
     client.readContract({ address: pool, abi: uniswapV3PoolAbi, functionName: "liquidity" }),
     client.readContract({ address: pool, abi: uniswapV3PoolAbi, functionName: "slot0" }),
+    client.readContract({ address: pool, abi: poolActivityAbi, functionName: "feeGrowthGlobal0X128" }),
+    client.readContract({ address: pool, abi: poolActivityAbi, functionName: "feeGrowthGlobal1X128" }),
   ]);
 
   const metadata = await readHoodiePadMetadata(tokenUri);
@@ -193,6 +209,7 @@ export async function readHoodiePadMarket(
     pool,
     poolFee: Number(poolFee),
     poolLiquidity: poolLiquidity.toString(),
+    hasSwapActivity: feeGrowthToken > 0n || feeGrowthHoodie > 0n,
     tick: Number(slot0[1]),
     hoodiePerToken: formatPrice(hoodiePerToken),
     maxBalance: formatUnits(maxBalance, decimals),

@@ -69,6 +69,8 @@ test("reads a confirmed HoodiePad market from canonical onchain state", async ()
             fee: product.pool.fee,
             liquidity: 918534269428014366906674n,
             slot0: [1n, -24_200, 0, 0, 0, 0, true] as const,
+            feeGrowthGlobal0X128: 0n,
+            feeGrowthGlobal1X128: 1n,
           };
           return poolReads[input.functionName];
         }
@@ -96,6 +98,7 @@ test("reads a confirmed HoodiePad market from canonical onchain state", async ()
     assert.equal(market.maxBalance, "20000000");
     assert.equal(market.poolFee, 10_000);
     assert.equal(market.poolLocked, true);
+    assert.equal(market.hasSwapActivity, true);
     assert.equal(market.official, true);
     assert.equal(market.imageUrl, `/api/artwork?key=${encodeURIComponent(artworkKey)}`);
   } finally {

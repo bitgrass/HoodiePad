@@ -114,10 +114,28 @@ export default async function TokenPage({
               <code>{shorten(market.address)}</code> ↗
             </a>
           </div>
-          <span className={`status-chip${market.official ? "" : " is-warning"}`}>
-            {market.official ? "Official HoodiePad launch" : "Unverified configuration"}
+          <span className={`status-chip${market.official && market.hasSwapActivity ? "" : " is-warning"}`}>
+            {!market.official
+              ? "Unverified configuration"
+              : market.hasSwapActivity
+                ? "Market active"
+                : "Pool ready · awaiting first trade"}
           </span>
         </div>
+        {market.official && !market.hasSwapActivity && (
+          <div className="market-activation-banner">
+            <div>
+              <strong>The pool is funded and ready; it has not traded yet.</strong>
+              <p>
+                Token search and market indexers may not discover a new pool until its first
+                swap. Use the canonical pool link for the first trade.
+              </p>
+            </div>
+            <a href={uniswapPool} target="_blank" rel="noreferrer">
+              Open canonical pool ↗
+            </a>
+          </div>
+        )}
         {market.description && <p className="token-description">{market.description}</p>}
         {(market.websiteUrl || market.xUrl) && (
           <div className="token-links">
@@ -134,7 +152,9 @@ export default async function TokenPage({
               <span>Onchain spot price</span>
               <strong>{market.hoodiePerToken} HOODIE</strong>
             </div>
-            <span className="live-chain-chip">LIVE · BLOCKCHAIN</span>
+            <span className="live-chain-chip">
+              {market.hasSwapActivity ? "ACTIVE · ONCHAIN" : "POOL READY"}
+            </span>
           </div>
           <div className="live-market-summary">
             <span>CANONICAL MARKET</span>
@@ -153,7 +173,7 @@ export default async function TokenPage({
             </div>
           </div>
           <div className="token-stat-row">
-            <div><span>Pool liquidity units</span><strong>{market.poolLiquidity}</strong></div>
+            <div><span>Swap history</span><strong>{market.hasSwapActivity ? "Detected" : "None yet"}</strong></div>
             <div><span>Creator share</span><strong>80%</strong></div>
             <div><span>Pool fee</span><strong>{(market.poolFee / 10_000).toFixed(2)}%</strong></div>
             <div><span>Max wallet</span><strong>{market.balanceLimitActive ? "Active" : "Expired"}</strong></div>
@@ -168,13 +188,14 @@ export default async function TokenPage({
             <div><dt>Creator</dt><dd>{shorten(market.creator)}</dd></div>
             <div><dt>Current tick</dt><dd>{market.tick}</dd></div>
             <div><dt>Pool locked</dt><dd>{market.poolLocked ? "Yes" : "No"}</dd></div>
+            <div><dt>DEX discovery</dt><dd>{market.hasSwapActivity ? "Triggered" : "Awaiting first swap"}</dd></div>
           </dl>
           <a className="button button-primary full-width" href={uniswapPool} target="_blank" rel="noreferrer">
-            Trade on Uniswap ↗
+            {market.hasSwapActivity ? "Trade on Uniswap ↗" : "Make the first trade ↗"}
           </a>
           <p className="trade-warning">
-            HoodiePad’s in-app router is not enabled yet. Verify the token and pool addresses
-            before trading externally.
+            This link opens the exact canonical pool, so it works before token search and
+            third-party indexers catch up.
           </p>
         </aside>
       </section>
