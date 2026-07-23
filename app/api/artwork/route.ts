@@ -1,4 +1,8 @@
-import { getRuntimeEnv } from "../../runtime-env";
+import {
+  getStoredObject,
+  ObjectStorageUnavailableError,
+  putStoredObject,
+} from "../../lib/object-storage";
 
 const MAX_ARTWORK_BYTES = 5 * 1024 * 1024;
 const supportedTypes = new Map([
@@ -6,10 +10,6 @@ const supportedTypes = new Map([
   ["image/png", "png"],
   ["image/webp", "webp"],
 ]);
-
-function artworkBucket() {
-  return getRuntimeEnv().ARTWORK;
-}
 
 async function sha256(value: ArrayBuffer) {
   const digest = await crypto.subtle.digest("SHA-256", value);
@@ -36,10 +36,18 @@ export async function POST(request: Request) {
   const digest = await sha256(bytes);
   const key = `token-artwork/${digest}.${extension}`;
 
-  await artworkBucket().put(key, bytes, {
-    httpMetadata: { contentType: file.type, cacheControl: "public, max-age=31536000, immutable" },
-    customMetadata: { originalName: file.name.slice(0, 160), sha256: digest },
-  });
+  try {
+    await putStoredObject(key, bytes, {
+      contentType: file.type,
+      cacheControl: "public, max-age=31536000, immutable",
+      customMetadata: { originalName: file.name.slice(0, 160), sha256: digest },
+    });
+  } catch (error) {
+    if (error instanceof ObjectStorageUnavailableError) {
+      return Response.json({ error: error.message }, { status: 503 });
+    }
+    throw error;
+  }
 
   const artworkUrl = new URL("/api/artwork", request.url);
   artworkUrl.searchParams.set("key", key);
@@ -59,13 +67,22 @@ export async function GET(request: Request) {
     return new Response("Invalid artwork key", { status: 400 });
   }
 
-  const object = await artworkBucket().get(key);
+  let object;
+  try {
+    object = await getStoredObject(key);
+  } catch (error) {
+    if (error instanceof ObjectStorageUnavailableError) {
+      return new Response(error.message, { status: 503 });
+    }
+    throw error;
+  }
   if (!object) return new Response("Artwork not found", { status: 404 });
 
-  const headers = new Headers();
-  object.writeHttpMetadata(headers);
-  headers.set("etag", object.httpEtag);
-  headers.set("cache-control", "public, max-age=31536000, immutable");
+  const headers = new Headers({
+    "content-type": object.contentType,
+    "cache-control": object.cacheControl,
+    etag: object.etag,
+  });
   headers.set("x-content-type-options", "nosniff");
   return new Response(object.body, { headers });
 }

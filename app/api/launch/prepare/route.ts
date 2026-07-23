@@ -5,7 +5,11 @@ import {
 } from "../../../lib/calibration";
 import { readChainStatus, simulateLaunch } from "../../../lib/protocol";
 import { getReleasePolicy } from "../../../lib/release-policy";
-import { getRuntimeEnv } from "../../../runtime-env";
+import {
+  headStoredObject,
+  ObjectStorageUnavailableError,
+  putStoredObject,
+} from "../../../lib/object-storage";
 import type { Address } from "viem";
 
 type LaunchDraft = {
@@ -63,8 +67,9 @@ async function storeMetadata(request: Request, launch: {
   const encoded = new TextEncoder().encode(JSON.stringify(metadata));
   const digest = (await checksum(metadata)).slice(2);
   const key = `token-metadata/${digest}.json`;
-  await getRuntimeEnv().ARTWORK.put(key, encoded, {
-    httpMetadata: { contentType: "application/json", cacheControl: "public, max-age=31536000, immutable" },
+  await putStoredObject(key, encoded, {
+    contentType: "application/json",
+    cacheControl: "public, max-age=31536000, immutable",
     customMetadata: { sha256: digest },
   });
   const url = new URL("/api/metadata", request.url);
@@ -115,7 +120,15 @@ export async function POST(request: Request) {
     );
   }
 
-  const artworkObject = await getRuntimeEnv().ARTWORK.head(artworkKey);
+  let artworkObject;
+  try {
+    artworkObject = await headStoredObject(artworkKey);
+  } catch (error) {
+    if (error instanceof ObjectStorageUnavailableError) {
+      return Response.json({ error: error.message }, { status: 503 });
+    }
+    throw error;
+  }
   if (!artworkObject || artworkObject.customMetadata?.sha256 !== artworkSha256) {
     return Response.json({ error: "Uploaded artwork could not be verified" }, { status: 422 });
   }
@@ -147,15 +160,23 @@ export async function POST(request: Request) {
     governance: product.pool.governance,
   };
 
-  const metadata = await storeMetadata(request, {
-    name: normalized.name,
-    symbol,
-    description: normalized.description,
-    artworkUrl,
-    artworkSha256,
-    website: normalized.website,
-    xUrl: normalized.xUrl,
-  });
+  let metadata;
+  try {
+    metadata = await storeMetadata(request, {
+      name: normalized.name,
+      symbol,
+      description: normalized.description,
+      artworkUrl,
+      artworkSha256,
+      website: normalized.website,
+      xUrl: normalized.xUrl,
+    });
+  } catch (error) {
+    if (error instanceof ObjectStorageUnavailableError) {
+      return Response.json({ error: error.message }, { status: 503 });
+    }
+    throw error;
+  }
   const chainStatus = await readChainStatus();
   const simulation = chainStatus.available
     ? await simulateLaunch({

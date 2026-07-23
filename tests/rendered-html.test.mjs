@@ -120,6 +120,22 @@ test("accepts a token artwork file and serves the immutable uploaded object", as
   assert.match(response.headers.get("cache-control") ?? "", /immutable/);
 });
 
+test("reports a healthy runtime when persistent object storage is available", async () => {
+  const app = await worker();
+  const response = await app.fetch(
+    new Request("http://localhost/api/health"),
+    env,
+    ctx,
+  );
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("cache-control"), "no-store");
+  assert.deepEqual(await response.json(), {
+    status: "ok",
+    service: "hoodiepad",
+    storage: "r2",
+  });
+});
+
 test("prepares a connected-wallet launch draft but fails closed on protocol blockers", async () => {
   const app = await worker();
   const uploaded = await uploadArtwork(app);

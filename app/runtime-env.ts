@@ -7,7 +7,9 @@ declare global {
 }
 
 export function getRuntimeEnv() {
-  const runtimeEnv = globalThis.__HOODIEPAD_RUNTIME_ENV__;
-  if (!runtimeEnv?.ARTWORK) throw new Error("HoodiePad artwork storage is unavailable");
-  return runtimeEnv;
+  return globalThis.__HOODIEPAD_RUNTIME_ENV__;
+}
+
+export function getR2Bucket() {
+  return getRuntimeEnv()?.ARTWORK;
 }

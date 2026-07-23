@@ -1,4 +1,7 @@
-import { getRuntimeEnv } from "../../runtime-env";
+import {
+  getStoredObject,
+  ObjectStorageUnavailableError,
+} from "../../lib/object-storage";
 
 const metadataKeyPattern = /^token-metadata\/[a-f0-9]{64}\.json$/;
 
@@ -8,13 +11,22 @@ export async function GET(request: Request) {
     return new Response("Invalid metadata key", { status: 400 });
   }
 
-  const object = await getRuntimeEnv().ARTWORK.get(key);
+  let object;
+  try {
+    object = await getStoredObject(key);
+  } catch (error) {
+    if (error instanceof ObjectStorageUnavailableError) {
+      return new Response(error.message, { status: 503 });
+    }
+    throw error;
+  }
   if (!object) return new Response("Metadata not found", { status: 404 });
 
-  const headers = new Headers();
-  object.writeHttpMetadata(headers);
-  headers.set("etag", object.httpEtag);
-  headers.set("cache-control", "public, max-age=31536000, immutable");
+  const headers = new Headers({
+    "content-type": object.contentType,
+    "cache-control": object.cacheControl,
+    etag: object.etag,
+  });
   headers.set("x-content-type-options", "nosniff");
   return new Response(object.body, { headers });
 }

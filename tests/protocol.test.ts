@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join, resolve, sep } from "node:path";
 import test from "node:test";
 import {
   getCalibrationConfigHash,
@@ -12,6 +15,12 @@ import {
   runtimeHashMatches,
 } from "../app/lib/protocol";
 import { getReleasePolicy } from "../app/lib/release-policy";
+import {
+  checkObjectStorage,
+  getStoredObject,
+  headStoredObject,
+  putStoredObject,
+} from "../app/lib/object-storage";
 
 test("derives the HOODIE curve for Doppler's child-token0 ordering", () => {
   const curve = deriveHoodieCurve(198_200);
@@ -119,4 +128,54 @@ test("records an owner waiver without mislabeling it as external review", () => 
   assert.equal(policy.reviewGateApproved, true);
   assert.equal(policy.reviewGateLabel, "OWNER WAIVER");
   assert.equal(policy.broadcastEnabled, true);
+});
+
+test("persists immutable uploads in the Railway filesystem storage backend", async (context) => {
+  const storageRoot = await mkdtemp(join(tmpdir(), "hoodiepad-storage-"));
+  const resolvedTemporaryRoot = resolve(tmpdir());
+  assert.ok(resolve(storageRoot).startsWith(`${resolvedTemporaryRoot}${sep}`));
+
+  const originalStorageDir = process.env.HOODIEPAD_STORAGE_DIR;
+  const originalVolumePath = process.env.RAILWAY_VOLUME_MOUNT_PATH;
+  process.env.HOODIEPAD_STORAGE_DIR = storageRoot;
+  delete process.env.RAILWAY_VOLUME_MOUNT_PATH;
+
+  context.after(async () => {
+    if (originalStorageDir === undefined) delete process.env.HOODIEPAD_STORAGE_DIR;
+    else process.env.HOODIEPAD_STORAGE_DIR = originalStorageDir;
+    if (originalVolumePath === undefined) delete process.env.RAILWAY_VOLUME_MOUNT_PATH;
+    else process.env.RAILWAY_VOLUME_MOUNT_PATH = originalVolumePath;
+    await rm(storageRoot, { recursive: true, force: true });
+  });
+
+  const digest = "a".repeat(64);
+  const key = `token-artwork/${digest}.png`;
+  const payload = new Uint8Array([137, 80, 78, 71, 13, 10]);
+
+  assert.deepEqual(await checkObjectStorage(), {
+    ready: true,
+    backend: "filesystem",
+  });
+
+  await putStoredObject(key, payload, {
+    contentType: "image/png",
+    customMetadata: { sha256: digest },
+  });
+  // Content-addressed objects are idempotent and never overwritten.
+  await putStoredObject(key, payload, {
+    contentType: "image/png",
+    customMetadata: { sha256: digest },
+  });
+
+  const head = await headStoredObject(key);
+  assert.equal(head?.customMetadata.sha256, digest);
+
+  const object = await getStoredObject(key);
+  assert.equal(object?.contentType, "image/png");
+  assert.match(object?.cacheControl ?? "", /immutable/);
+  assert.equal(object?.etag, `"${digest}"`);
+  assert.deepEqual(
+    new Uint8Array(await new Response(object?.body).arrayBuffer()),
+    payload,
+  );
 });

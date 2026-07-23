@@ -31,6 +31,26 @@ npm run build
 npm test
 ```
 
+## Railway deployment
+
+HoodiePad includes a production `railway.json` with a Railpack build, Vinext
+start command, `/api/health` readiness check, and crash restart policy.
+
+The Railway service requires:
+
+- A persistent Volume mounted at `/data` for immutable artwork and metadata.
+- `Alchemy_API_KEY` as a Railway secret.
+- `VINEXT_TRUST_PROXY=1`.
+- `VINEXT_TRUSTED_HOSTS=${{RAILWAY_PUBLIC_DOMAIN}}`.
+- The reviewed release-policy variables described in the deployment runbook.
+
+Railway supplies `PORT` and `RAILWAY_VOLUME_MOUNT_PATH`; do not define either
+one manually. Do not configure or upload a private key—the connected MetaMask
+wallet signs every mainnet launch.
+
+Follow [`docs/runbooks/railway-deploy.md`](docs/runbooks/railway-deploy.md) for
+the complete setup, health check, canary, rollback, and backup procedure.
+
 ## Robinhood fork calibration
 
 The calibration command launches a disposable local Anvil fork, creates the
