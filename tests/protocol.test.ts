@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve, sep } from "node:path";
 import test from "node:test";
@@ -178,4 +178,17 @@ test("persists immutable uploads in the Railway filesystem storage backend", asy
     new Uint8Array(await new Response(object?.body).arrayBuffer()),
     payload,
   );
+});
+
+test("keeps Railway clean installs compatible with the pinned Doppler peer", async () => {
+  const npmConfig = await readFile(new URL("../.npmrc", import.meta.url), "utf8");
+  const railway = JSON.parse(
+    await readFile(new URL("../railway.json", import.meta.url), "utf8"),
+  );
+
+  assert.match(npmConfig, /^legacy-peer-deps=true$/m);
+  assert.equal(railway.build.builder, "RAILPACK");
+  assert.equal(railway.build.buildCommand, "npm run build");
+  assert.equal(railway.deploy.startCommand, "npm run start");
+  assert.equal(railway.deploy.healthcheckPath, "/api/health");
 });

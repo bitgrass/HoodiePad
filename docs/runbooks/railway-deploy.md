@@ -12,9 +12,14 @@ and signed by the connected MetaMask account.
 3. Keep the checked-in `railway.json` as the service configuration source.
 4. Generate a Railway public domain after the first successful deployment.
 
-Railpack runs `npm ci && npm run build`; Railway starts the resulting Vinext
-server with `npm run start`. The server reads Railway's injected `PORT` and
-binds to `0.0.0.0`.
+Railpack installs the locked dependencies and then runs `npm run build`;
+Railway starts the resulting Vinext server with `npm run start`. The server
+reads Railway's injected `PORT` and binds to `0.0.0.0`.
+
+The checked-in `.npmrc` enables npm's legacy peer resolver because the pinned
+Doppler SDK `1.0.28` declares an optional React 18 peer while the pinned Vinext
+runtime requires React `19.2.6`. This does not change either dependency version;
+it tells clean `npm ci` installs to honor the reviewed `package-lock.json`.
 
 ## 2. Attach persistent storage
 
