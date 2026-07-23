@@ -63,6 +63,15 @@ type UploadedArtwork = {
   sha256: string;
 };
 
+type ConfirmedDeployment = {
+  status: "confirmed";
+  transactionHash: string;
+  blockNumber: string;
+  creator: string;
+  token: string;
+  pool: string;
+};
+
 const initialDraft: Draft = {
   name: "",
   symbol: "",
@@ -73,7 +82,7 @@ const initialDraft: Draft = {
 
 const addressPattern = /^0x[a-fA-F0-9]{40}$/;
 const supportedArtworkTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
-const maxArtworkBytes = 5 * 1024 * 1024;
+const maxArtworkBytes = 750 * 1024;
 const ecosystemSafe = "0xAB10Efe787DB2ef3700b94578aeC68b98e0446A7";
 const launchSteps = [
   [1, "Token details", "Name the thing"],
@@ -85,6 +94,39 @@ function shorten(address: string) {
   return `${address.slice(0, 8)}…${address.slice(-6)}`;
 }
 
+function wait(milliseconds: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+}
+
+async function confirmDeployment(
+  transactionHash: string,
+  predictedToken: string,
+  predictedPool: string,
+) {
+  for (let attempt = 0; attempt < 75; attempt += 1) {
+    const response = await fetch("/api/launch/confirm", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ transactionHash, predictedToken, predictedPool }),
+    });
+    if (response.status === 202) {
+      await wait(2_000);
+      continue;
+    }
+    const payload = await response.json().catch(() => null) as
+      | ConfirmedDeployment
+      | { error?: string }
+      | null;
+    if (!response.ok) {
+      throw new Error(payload && "error" in payload && payload.error
+        ? payload.error
+        : "Robinhood confirmation failed.");
+    }
+    return payload as ConfirmedDeployment;
+  }
+  throw new Error("Robinhood confirmation is taking longer than expected.");
+}
+
 export function LaunchWizard() {
   const { address, sendTransaction } = useWallet();
   const [step, setStep] = useState(1);
@@ -93,11 +135,12 @@ export function LaunchWizard() {
   const [artworkError, setArtworkError] = useState("");
   const [agreed, setAgreed] = useState(false);
   const [status, setStatus] = useState<
-    "idle" | "uploading" | "preparing" | "deploying" | "deployed" | "error"
+    "idle" | "uploading" | "preparing" | "deploying" | "confirming" | "deployed" | "error"
   >("idle");
   const [prepared, setPrepared] = useState<PreparedLaunch | null>(null);
   const [preparedWallet, setPreparedWallet] = useState("");
   const [transactionHash, setTransactionHash] = useState("");
+  const [confirmedDeployment, setConfirmedDeployment] = useState<ConfirmedDeployment | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
 
   const artworkPreview = useMemo(() => (artwork ? URL.createObjectURL(artwork) : ""), [artwork]);
@@ -118,6 +161,7 @@ export function LaunchWizard() {
     setPrepared(null);
     setPreparedWallet("");
     setTransactionHash("");
+    setConfirmedDeployment(null);
     setErrorMessage("");
     setDraft((current) => ({
       ...current,
@@ -129,6 +173,7 @@ export function LaunchWizard() {
     setPrepared(null);
     setPreparedWallet("");
     setTransactionHash("");
+    setConfirmedDeployment(null);
     setErrorMessage("");
     setArtworkError("");
     if (!file) {
@@ -137,7 +182,7 @@ export function LaunchWizard() {
     }
     if (!supportedArtworkTypes.has(file.type) || file.size > maxArtworkBytes || file.size === 0) {
       setArtwork(null);
-      setArtworkError("Choose a JPG, PNG, or WebP image no larger than 5 MB.");
+      setArtworkError("Choose a JPG, PNG, or WebP image no larger than 750 KB for Railway.");
       return;
     }
     setArtwork(file);
@@ -166,6 +211,7 @@ export function LaunchWizard() {
     setPrepared(null);
     setPreparedWallet("");
     setTransactionHash("");
+    setConfirmedDeployment(null);
     setErrorMessage("");
     setStatus("uploading");
     try {
@@ -207,13 +253,34 @@ export function LaunchWizard() {
     }
     setErrorMessage("");
     setStatus("deploying");
+    let submittedHash = "";
     try {
       const hash = await sendTransaction(prepared.deployment);
+      submittedHash = hash;
       setTransactionHash(hash);
+      setStatus("confirming");
+      const confirmed = await confirmDeployment(
+        hash,
+        prepared.deployment.predictedToken,
+        prepared.deployment.predictedPool,
+      );
+      setConfirmedDeployment(confirmed);
       setStatus("deployed");
-    } catch {
-      setErrorMessage("MetaMask did not submit the deployment. Review the transaction and try again.");
-      setStatus("error");
+      window.location.assign(
+        `/token/${confirmed.token}?tx=${encodeURIComponent(confirmed.transactionHash)}`,
+      );
+    } catch (error) {
+      if (submittedHash) {
+        setErrorMessage(
+          error instanceof Error
+            ? `The transaction was submitted, but HoodiePad could not confirm its token details yet: ${error.message}`
+            : "The transaction was submitted, but token confirmation is still pending.",
+        );
+        setStatus("deployed");
+      } else {
+        setErrorMessage("MetaMask did not submit the deployment. Review the transaction and try again.");
+        setStatus("error");
+      }
     }
   }
 
@@ -261,7 +328,7 @@ export function LaunchWizard() {
               <textarea value={draft.description} onChange={(e) => update("description", e.target.value)} maxLength={280} placeholder="Optional: tell the hood what this token is about. Links belong in the fields below." />
             </label>
             <label className={`artwork-picker${artwork ? " has-file" : ""}`}>
-              <span>Token artwork <em>JPG, PNG or WebP · max 5 MB</em></span>
+              <span>Token artwork <em>JPG, PNG or WebP · max 750 KB on Railway</em></span>
               <input
                 className="artwork-input"
                 type="file"
@@ -380,7 +447,13 @@ export function LaunchWizard() {
             )}
             {transactionHash && prepared?.deployment && (
               <div className="deployment-success" role="status">
-                <strong>Deployment submitted to Robinhood Chain.</strong>
+                <strong>
+                  {confirmedDeployment
+                    ? "Deployment confirmed on Robinhood Chain."
+                    : status === "confirming"
+                      ? "Deployment submitted. Waiting for Robinhood confirmation…"
+                      : "Deployment submitted to Robinhood Chain."}
+                </strong>
                 <a
                   href={`https://robinhoodchain.blockscout.com/tx/${transactionHash}`}
                   target="_blank"
@@ -388,9 +461,12 @@ export function LaunchWizard() {
                 >
                   View transaction
                 </a>
-                <a href={`/token/${prepared.deployment.predictedToken}`}>
-                  Open predicted token page
+                <a
+                  href={`/token/${confirmedDeployment?.token ?? prepared.deployment.predictedToken}?tx=${encodeURIComponent(transactionHash)}`}
+                >
+                  Open {confirmedDeployment ? "confirmed" : "predicted"} token page
                 </a>
+                {confirmedDeployment && <span>Pool {shorten(confirmedDeployment.pool)}</span>}
               </div>
             )}
             {status === "error" && <p className="form-error">{errorMessage}</p>}
@@ -400,13 +476,15 @@ export function LaunchWizard() {
                 <button
                   className="button button-primary"
                   type="button"
-                  disabled={status === "deploying" || status === "deployed"}
+                  disabled={status === "deploying" || status === "confirming" || status === "deployed"}
                   onClick={deployLaunch}
                 >
                   {status === "deploying"
                     ? "Confirm in MetaMask"
+                    : status === "confirming"
+                      ? "Confirming on Robinhood"
                     : status === "deployed"
-                      ? "Deployment submitted"
+                      ? confirmedDeployment ? "Deployment confirmed" : "Deployment submitted"
                       : "Deploy with MetaMask"} <span>↗</span>
                 </button>
               ) : (

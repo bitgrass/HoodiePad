@@ -136,6 +136,32 @@ test("rejects multipart artwork requests before the production proxy must parse 
   assert.match((await response.json()).error, /JPG, PNG, or WebP/);
 });
 
+test("rejects artwork above HoodiePad's Railway-safe 750 KB limit", async () => {
+  const app = await worker();
+  const response = await app.fetch(new Request("http://localhost/api/artwork", {
+    method: "POST",
+    headers: { "content-type": "image/png" },
+    body: new Uint8Array(750 * 1024 + 1),
+  }), env, ctx);
+  assert.equal(response.status, 422);
+  assert.match((await response.json()).error, /750 KB/);
+});
+
+test("rejects malformed deployment confirmation requests without reading the chain", async () => {
+  const app = await worker();
+  const response = await app.fetch(new Request("http://localhost/api/launch/confirm", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      transactionHash: "0x1234",
+      predictedToken: "0x1111111111111111111111111111111111111111",
+      predictedPool: "0x2222222222222222222222222222222222222222",
+    }),
+  }), env, ctx);
+  assert.equal(response.status, 422);
+  assert.match((await response.json()).error, /Invalid deployment confirmation/);
+});
+
 test("reports a healthy runtime when persistent object storage is available", async () => {
   const app = await worker();
   const response = await app.fetch(

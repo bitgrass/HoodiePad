@@ -358,6 +358,18 @@ button { color: inherit; }
 .token-identity h1 { margin: 0 0 5px; font-size: 39px; letter-spacing: -.055em; }
 .token-identity code { color: var(--muted); font-size: 9px; }
 .token-identity .status-chip { margin-left: auto; }
+.token-avatar.has-artwork { background-position: center; background-size: cover; color: transparent; }
+.status-chip.is-warning { background: #ffd5a3; }
+.launch-confirmed-banner { margin-top: 24px; padding: 13px 16px; display: flex; justify-content: space-between; gap: 15px; border: 1.5px solid #587929; border-radius: 8px; background: var(--acid-soft); font-size: 10px; }
+.launch-confirmed-banner a, .token-links a, .token-identity a { color: inherit; font-weight: 850; }
+.token-description { max-width: 720px; margin: 24px 0 0; color: var(--muted); font-size: 13px; line-height: 1.65; }
+.token-links { display: flex; gap: 16px; margin-top: 14px; font-size: 10px; text-decoration: underline; }
+.token-unavailable { max-width: 720px; margin: 45px 0 100px; padding: 30px; border: 2px solid var(--ink); border-radius: 15px; background: var(--paper); box-shadow: 5px 5px 0 var(--ink); }
+.token-unavailable > span { font: 900 9px/1 "Courier New", monospace; letter-spacing: .1em; }
+.token-unavailable h1 { margin: 15px 0 10px; font-size: 40px; letter-spacing: -.05em; }
+.token-unavailable p { color: var(--muted); line-height: 1.55; }
+.token-unavailable code { display: block; margin: 20px 0; overflow-wrap: anywhere; font-size: 10px; }
+.token-unavailable a { font-size: 11px; font-weight: 850; text-decoration: underline; }
 .token-layout { padding: 20px 0 75px; display: grid; grid-template-columns: 1fr 360px; gap: 20px; }
 .chart-panel, .trade-panel { border: 2px solid var(--ink); border-radius: 15px; background: var(--paper); box-shadow: 5px 5px 0 var(--ink); }
 .chart-panel { overflow: hidden; }
@@ -365,6 +377,13 @@ button { color: inherit; }
 .price-row div span, .price-row div strong { display: block; }
 .price-row div span { color: var(--muted); font-size: 10px; }
 .price-row div strong { margin-top: 6px; font-size: 26px; }
+.live-chain-chip { padding: 7px 9px; border: 1px solid var(--ink); border-radius: 999px; background: var(--acid); font: 900 8px/1 "Courier New", monospace; }
+.live-market-summary { min-height: 280px; padding: 48px; display: flex; flex-direction: column; justify-content: center; background-image: radial-gradient(#ded6c9 1px, transparent 1px); background-size: 15px 15px; }
+.live-market-summary > span { font: 900 8px/1 "Courier New", monospace; letter-spacing: .1em; }
+.live-market-summary h2 { margin: 15px 0 7px; font-size: 34px; letter-spacing: -.05em; }
+.live-market-summary p { max-width: 570px; color: var(--muted); font-size: 12px; line-height: 1.6; }
+.live-market-summary > div { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 13px; }
+.live-market-summary a { padding: 9px 11px; border: 1px solid var(--ink); border-radius: 6px; background: var(--paper); color: inherit; font-size: 9px; font-weight: 850; }
 .mock-chart { height: 330px; position: relative; overflow: hidden; background-image: linear-gradient(#e8e1d5 1px, transparent 1px), linear-gradient(90deg,#e8e1d5 1px,transparent 1px); background-size: 48px 48px; }
 .chart-watermark { position: absolute; right: 15px; top: 15px; color: #bdb5a8; font: 900 9px/1 "Courier New", monospace; }
 .chart-curve { position: absolute; left: -5%; right: -5%; bottom: 55px; height: 190px; border-top: 7px solid var(--acid); border-radius: 50%; transform: rotate(-4deg); filter: drop-shadow(0 3px 0 var(--ink)); }
@@ -387,6 +406,12 @@ button { color: inherit; }
 .trade-details { margin: 20px 0; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; color: var(--muted); font-size: 9px; }
 .trade-details strong { color: var(--ink); text-align: right; }
 .trade-warning { margin: 12px 0 0; color: var(--muted); font-size: 8px; line-height: 1.4; text-align: center; }
+.live-details-panel dl { margin: 18px 0 22px; }
+.live-details-panel dl div { padding: 11px 0; display: flex; justify-content: space-between; gap: 12px; border-bottom: 1px solid #d8d0c4; }
+.live-details-panel dt { color: var(--muted); font-size: 9px; }
+.live-details-panel dd { margin: 0; font-size: 10px; font-weight: 850; text-align: right; }
+.live-details-panel dd a { color: inherit; text-decoration: underline; }
+.live-details-panel .button { display: flex; align-items: center; justify-content: center; }
 .market-info { padding-bottom: 100px; }
 .market-info h2 { font-size: 28px; letter-spacing: -.04em; }
 .market-info > div { display: grid; grid-template-columns: repeat(4, 1fr); border: 1.5px solid var(--ink); border-radius: 10px; overflow: hidden; background: var(--paper); }

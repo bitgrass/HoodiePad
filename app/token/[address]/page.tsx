@@ -1,39 +1,197 @@
 import Link from "next/link";
+import product from "../../../config/hoodiepad-v1.json";
 import { AppShell } from "../../components/AppShell";
-import { previewMarkets } from "../../data";
+import { readHoodiePadMarket, type HoodiePadMarket } from "../../lib/market";
 
-export default async function TokenPage({ params }: { params: Promise<{ address: string }> }) {
-  const { address } = await params;
-  const market = previewMarkets.find((item) => item.address.toLowerCase() === address.toLowerCase()) ?? previewMarkets[0];
+export const revalidate = 0;
+
+const transactionHashPattern = /^0x[a-fA-F0-9]{64}$/;
+
+function shorten(value: string) {
+  return `${value.slice(0, 8)}…${value.slice(-6)}`;
+}
+
+function grouped(value: string) {
+  const [whole, fraction] = value.split(".");
+  const result = BigInt(whole).toLocaleString("en-US");
+  return fraction ? `${result}.${fraction}` : result;
+}
+
+function limitEndLabel(timestamp: number) {
+  return new Intl.DateTimeFormat("en-US", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "UTC",
+  }).format(new Date(timestamp * 1000));
+}
+
+function MarketUnavailable({ address, message }: { address: string; message: string }) {
+  return (
+    <AppShell>
+      <section className="token-head section-frame">
+        <Link href="/explore">← All markets</Link>
+        <div className="token-unavailable">
+          <span>MARKET LOOKUP</span>
+          <h1>Token details unavailable.</h1>
+          <p>{message}</p>
+          <code>{address}</code>
+          <a
+            href={`${product.network.explorerUrl}/address/${address}`}
+            target="_blank"
+            rel="noreferrer"
+          >
+            Check the address on Blockscout ↗
+          </a>
+        </div>
+      </section>
+    </AppShell>
+  );
+}
+
+export default async function TokenPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ address: string }>;
+  searchParams: Promise<{ tx?: string }>;
+}) {
+  const [{ address }, query] = await Promise.all([params, searchParams]);
+  let market: HoodiePadMarket;
+  try {
+    market = await readHoodiePadMarket(address);
+  } catch (error) {
+    const missingContract =
+      error instanceof Error && error.message === "No token contract exists at this address";
+    return (
+      <MarketUnavailable
+        address={address}
+        message={missingContract
+          ? error.message
+          : "HoodiePad could not read this market from Robinhood Chain. Try again shortly or verify the address on Blockscout."}
+      />
+    );
+  }
+
+  const transactionHash =
+    typeof query.tx === "string" && transactionHashPattern.test(query.tx)
+      ? query.tx
+      : "";
+  const explorerToken = `${product.network.explorerUrl}/token/${market.address}`;
+  const explorerPool = `${product.network.explorerUrl}/address/${market.pool}`;
+  const uniswapPool = `https://app.uniswap.org/explore/pools/robinhood/${market.pool}`;
 
   return (
     <AppShell>
       <section className="token-head section-frame">
         <Link href="/explore">← All markets</Link>
+        {transactionHash && (
+          <div className="launch-confirmed-banner">
+            <strong>Launch confirmed on Robinhood Chain.</strong>
+            <a
+              href={`${product.network.explorerUrl}/tx/${transactionHash}`}
+              target="_blank"
+              rel="noreferrer"
+            >
+              View transaction ↗
+            </a>
+          </div>
+        )}
         <div className="token-identity">
-          <div className={`token-avatar large tone-${market.tone}`}>{market.symbol.slice(0, 2)}</div>
-          <div><p>${market.symbol} / HOODIE</p><h1>{market.name}</h1><code>{address.slice(0, 8)}…{address.slice(-6)}</code></div>
-          <span className="status-chip">Market forming</span>
+          <div
+            className={`token-avatar large${market.imageUrl ? " has-artwork" : ""}`}
+            style={
+              market.imageUrl
+                ? { backgroundImage: `url("${market.imageUrl.replaceAll('"', "%22")}")` }
+                : undefined
+            }
+          >
+            {market.imageUrl ? "" : market.symbol.slice(0, 2)}
+          </div>
+          <div>
+            <p>${market.symbol} / HOODIE</p>
+            <h1>{market.name}</h1>
+            <a href={explorerToken} target="_blank" rel="noreferrer">
+              <code>{shorten(market.address)}</code> ↗
+            </a>
+          </div>
+          <span className={`status-chip${market.official ? "" : " is-warning"}`}>
+            {market.official ? "Official HoodiePad launch" : "Unverified configuration"}
+          </span>
         </div>
+        {market.description && <p className="token-description">{market.description}</p>}
+        {(market.websiteUrl || market.xUrl) && (
+          <div className="token-links">
+            {market.websiteUrl && <a href={market.websiteUrl} target="_blank" rel="noreferrer">Website ↗</a>}
+            {market.xUrl && <a href={market.xUrl} target="_blank" rel="noreferrer">X / Twitter ↗</a>}
+          </div>
+        )}
       </section>
+
       <section className="token-layout section-frame">
         <div className="chart-panel">
-          <div className="price-row"><div><span>Current price</span><strong>{market.price} HOODIE</strong></div><span className={market.change.startsWith("-") ? "change-down" : "change-up"}>{market.change}</span></div>
-          <div className="mock-chart" aria-label="Preview market chart"><span className="chart-watermark">PREVIEW</span><div className="chart-curve" /></div>
-          <div className="token-stat-row"><div><span>24h volume</span><strong>{market.volume}</strong></div><div><span>Creator share</span><strong>80%</strong></div><div><span>Pool fee</span><strong>1%</strong></div><div><span>Max wallet</span><strong>2% · 24h</strong></div></div>
+          <div className="price-row">
+            <div>
+              <span>Onchain spot price</span>
+              <strong>{market.hoodiePerToken} HOODIE</strong>
+            </div>
+            <span className="live-chain-chip">LIVE · BLOCKCHAIN</span>
+          </div>
+          <div className="live-market-summary">
+            <span>CANONICAL MARKET</span>
+            <h2>${market.symbol} / HOODIE</h2>
+            <p>
+              This is the exact locked pool created by Doppler Airlock. HoodiePad reads these
+              values directly from Robinhood Chain.
+            </p>
+            <div>
+              <a href={explorerPool} target="_blank" rel="noreferrer">
+                Pool {shorten(market.pool)} ↗
+              </a>
+              <a href={uniswapPool} target="_blank" rel="noreferrer">
+                Open on Uniswap ↗
+              </a>
+            </div>
+          </div>
+          <div className="token-stat-row">
+            <div><span>Pool liquidity units</span><strong>{market.poolLiquidity}</strong></div>
+            <div><span>Creator share</span><strong>80%</strong></div>
+            <div><span>Pool fee</span><strong>{(market.poolFee / 10_000).toFixed(2)}%</strong></div>
+            <div><span>Max wallet</span><strong>{market.balanceLimitActive ? "Active" : "Expired"}</strong></div>
+          </div>
         </div>
-        <aside className="trade-panel">
-          <div className="trade-tabs"><button className="is-active" type="button">Buy</button><button type="button">Sell</button></div>
-          <label><span>You pay</span><div><input placeholder="0.00" inputMode="decimal" /><strong>HOODIE</strong></div></label>
-          <button className="swap-arrow" type="button" aria-label="Swap direction">↓</button>
-          <label><span>You receive</span><div><input placeholder="0.00" inputMode="decimal" readOnly /><strong>{market.symbol}</strong></div></label>
-          <div className="trade-details"><span>Route</span><strong>HOODIE → {market.symbol}</strong><span>Pool fee</span><strong>1.00%</strong><span>Price impact</span><strong>—</strong></div>
-          <button className="button button-primary full-width" type="button">Connect wallet</button>
-          <p className="trade-warning">Preview market only. Live trading activates after the verified indexer and router integration ship.</p>
+
+        <aside className="trade-panel live-details-panel">
+          <span className="preview-label">CONTRACT DETAILS</span>
+          <dl>
+            <div><dt>Token</dt><dd><a href={explorerToken} target="_blank" rel="noreferrer">{shorten(market.address)} ↗</a></dd></div>
+            <div><dt>Pool</dt><dd><a href={explorerPool} target="_blank" rel="noreferrer">{shorten(market.pool)} ↗</a></dd></div>
+            <div><dt>Creator</dt><dd>{shorten(market.creator)}</dd></div>
+            <div><dt>Current tick</dt><dd>{market.tick}</dd></div>
+            <div><dt>Pool locked</dt><dd>{market.poolLocked ? "Yes" : "No"}</dd></div>
+          </dl>
+          <a className="button button-primary full-width" href={uniswapPool} target="_blank" rel="noreferrer">
+            Trade on Uniswap ↗
+          </a>
+          <p className="trade-warning">
+            HoodiePad’s in-app router is not enabled yet. Verify the token and pool addresses
+            before trading externally.
+          </p>
         </aside>
       </section>
-      <section className="market-info section-frame"><h2>Market rules</h2><div><span>Canonical quote</span><strong>HOODIE</strong><span>Supply</span><strong>1,000,000,000</strong><span>Migration</span><strong>None</strong><span>Creator allocation</span><strong>0%</strong></div></section>
+
+      <section className="market-info section-frame">
+        <h2>Market rules</h2>
+        <div>
+          <span>Canonical quote</span><strong>HOODIE</strong>
+          <span>Supply</span><strong>{grouped(market.totalSupply)}</strong>
+          <span>Migration</span><strong>None</strong>
+          <span>Creator allocation</span><strong>0%</strong>
+          <span>Maximum wallet</span><strong>{grouped(market.maxBalance)}</strong>
+          <span>Limit expiry</span><strong>{limitEndLabel(market.balanceLimitEnd)} UTC</strong>
+          <span>Token ordering</span><strong>CHILD / HOODIE</strong>
+          <span>Chain</span><strong>Robinhood · 4663</strong>
+        </div>
+      </section>
     </AppShell>
   );
 }
-

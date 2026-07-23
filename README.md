@@ -11,7 +11,7 @@ HoodiePad is a creator-first token launchpad for Robinhood Chain. Official marke
 - No creator allocation, presale, initial creator buy, governance, or migration.
 - Doppler Lockable Uniswap V3 until canonical Robinhood Multicurve support exists.
 - MetaMask connection on Robinhood Chain; the connected account is the creator fee recipient.
-- Direct JPG, PNG, or WebP artwork uploads backed by managed object storage.
+- Direct JPG, PNG, or WebP artwork uploads up to 750 KB, backed by managed object storage.
 - Fixed ecosystem Safe: `0xAB10Efe787DB2ef3700b94578aeC68b98e0446A7`.
 
 ## Local preview
@@ -103,7 +103,9 @@ is satisfied by external approval or an explicit owner risk waiver, and
 Mainnet submission is never performed by server tooling. The connected creator
 must confirm the exact `Airlock.create` transaction in MetaMask. Prepared
 transactions expire after ten minutes so the 24-hour wallet-limit window begins
-close to the actual launch time.
+close to the actual launch time. After submission, HoodiePad confirms the
+canonical Airlock `Create` event, checks the actual token and pool against the
+simulation, and opens a live onchain token-details page.
 
 Never store a private key in this repository. Use a human-controlled wallet or Safe for approved production actions.
 

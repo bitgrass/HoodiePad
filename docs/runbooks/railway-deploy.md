@@ -98,11 +98,16 @@ Then complete these checks:
 
 1. Open the app and connect MetaMask.
 2. Confirm the wallet switches to Robinhood Chain `4663`.
-3. Upload a small JPG, PNG, or WebP and reload its returned artwork URL.
+3. Upload a JPG, PNG, or WebP no larger than 750 KB and reload its returned
+   artwork URL. HoodiePad keeps this limit below Railway's observed request
+   ceiling so the platform does not reject the request before the app receives it.
 4. Complete the launch form and confirm live simulation succeeds.
 5. Check that the review gate is labeled `OWNER WAIVER`, not external review.
 6. Run the mainnet canary in `docs/runbooks/mainnet-canary.md` with a
    human-confirmed MetaMask transaction.
+7. Confirm the launch UI changes from submitted to confirmed, then opens the
+   real `/token/<address>?tx=<hash>` page. Check that its token, pool, supply,
+   fee, lock status, and metadata match Blockscout.
 
 ## 5. Rollback and operations
 
@@ -111,8 +116,8 @@ Then complete these checks:
 - Roll back application code with Railway's deployment history.
 - Never delete or detach the Volume while published metadata URLs reference it.
 - Restore stored artwork and metadata from a Railway Volume backup if needed.
-- Monitor Railway logs for `503` responses from upload, metadata, or health
-  endpoints.
+- Monitor Railway logs for `413` upload responses and `503` responses from
+  metadata, chain confirmation, or health endpoints.
 
 An attached Railway Volume prevents the old and new deployment from mounting
 the same data simultaneously, so brief deployment downtime is expected. Plan

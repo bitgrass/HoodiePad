@@ -4,7 +4,8 @@ import {
   putStoredObject,
 } from "../../lib/object-storage";
 
-const MAX_ARTWORK_BYTES = 5 * 1024 * 1024;
+const MAX_ARTWORK_BYTES = 750 * 1024;
+const artworkError = "Artwork must be a JPG, PNG, or WebP file no larger than 750 KB.";
 const supportedTypes = new Map([
   ["image/jpeg", "jpg"],
   ["image/png", "png"],
@@ -34,7 +35,7 @@ export async function POST(request: Request) {
   const declaredSize = Number(request.headers.get("content-length") ?? "0");
   if (!extension || (Number.isFinite(declaredSize) && declaredSize > MAX_ARTWORK_BYTES)) {
     return Response.json(
-      { error: "Artwork must be a JPG, PNG, or WebP file no larger than 5 MB." },
+      { error: artworkError },
       { status: 422 },
     );
   }
@@ -42,7 +43,7 @@ export async function POST(request: Request) {
   const bytes = await request.arrayBuffer();
   if (bytes.byteLength === 0 || bytes.byteLength > MAX_ARTWORK_BYTES) {
     return Response.json(
-      { error: "Artwork must be a JPG, PNG, or WebP file no larger than 5 MB." },
+      { error: artworkError },
       { status: 422 },
     );
   }
