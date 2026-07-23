@@ -56,6 +56,7 @@ test("server-renders the finished HoodiePad home page with the supplied logo", a
   assert.match(html, /Launch it\./);
   assert.match(html, /creators keep 80%/i);
   assert.match(html, /hoodie-logo\.jpg/);
+  assert.doesNotMatch(html, /_vinext\/image[^\"]*hoodie-logo/);
   assert.doesNotMatch(html, />HOODIEPAD</);
   assert.doesNotMatch(html, /codex-preview|react-loading-skeleton|Your site is taking shape/i);
 });
@@ -101,7 +102,7 @@ test("prepares a connected-wallet launch draft but fails closed on protocol bloc
     body: JSON.stringify({
       name: "Hoodie Hug",
       symbol: "HUG",
-      description: "A community token for everyone keeping the hood on.",
+      description: "",
       artworkKey: uploaded.key,
       artworkUrl: uploaded.url,
       artworkSha256: uploaded.sha256,

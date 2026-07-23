@@ -31,6 +31,7 @@ This file is authoritative for HoodiePad V1. Changes to a frozen value require a
 | Launch surcharge | None |
 | Graduation | UI milestone only; never migrates |
 | Token artwork | Creator uploads JPG, PNG, or WebP; HoodiePad stores it in managed object storage |
+| Token description | Optional, maximum 280 characters |
 | Creator fee recipient | Connected MetaMask account; not independently editable |
 | Metadata | HoodiePad generates the immutable production metadata URI |
 | Base | Out of scope |

@@ -20,6 +20,10 @@ function isText(value: unknown, min: number, max: number) {
   return typeof value === "string" && value.trim().length >= min && value.trim().length <= max;
 }
 
+function isOptionalText(value: unknown, max: number) {
+  return value === undefined || (typeof value === "string" && value.trim().length <= max);
+}
+
 async function checksum(value: unknown) {
   const bytes = new TextEncoder().encode(JSON.stringify(value));
   const digest = await crypto.subtle.digest("SHA-256", bytes);
@@ -51,7 +55,7 @@ export async function POST(request: Request) {
   if (
     !isText(body.name, 2, 40) ||
     !/^[A-Z0-9]{2,10}$/.test(symbol) ||
-    !isText(body.description, 20, 280) ||
+    !isOptionalText(body.description, 280) ||
     typeof body.payoutWallet !== "string" ||
     !addressPattern.test(body.payoutWallet) ||
     !artworkKeyPattern.test(artworkKey) ||
@@ -75,7 +79,7 @@ export async function POST(request: Request) {
   const normalized = {
     name: String(body.name).trim(),
     symbol,
-    description: String(body.description).trim(),
+    description: typeof body.description === "string" ? body.description.trim() : "",
     artwork: { key: artworkKey, url: artworkUrl, sha256: artworkSha256 },
     website: typeof body.website === "string" ? body.website.trim() : "",
     xUrl: typeof body.xUrl === "string" ? body.xUrl.trim() : "",

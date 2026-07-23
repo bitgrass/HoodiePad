@@ -52,18 +52,17 @@ export function LaunchWizard() {
   const [agreed, setAgreed] = useState(false);
   const [status, setStatus] = useState<"idle" | "uploading" | "preparing" | "error">("idle");
   const [prepared, setPrepared] = useState<PreparedLaunch | null>(null);
+  const [preparedWallet, setPreparedWallet] = useState("");
 
   const artworkPreview = useMemo(() => (artwork ? URL.createObjectURL(artwork) : ""), [artwork]);
   useEffect(() => () => {
     if (artworkPreview) URL.revokeObjectURL(artworkPreview);
   }, [artworkPreview]);
-  useEffect(() => setPrepared(null), [address]);
 
   const validMetadata = useMemo(
     () =>
       draft.name.trim().length >= 2 &&
       /^[A-Za-z0-9]{2,10}$/.test(draft.symbol) &&
-      draft.description.trim().length >= 20 &&
       artwork !== null,
     [artwork, draft],
   );
@@ -71,6 +70,7 @@ export function LaunchWizard() {
 
   function update<K extends keyof Draft>(key: K, value: Draft[K]) {
     setPrepared(null);
+    setPreparedWallet("");
     setDraft((current) => ({
       ...current,
       [key]: key === "symbol" ? String(value).toUpperCase() : value,
@@ -79,6 +79,7 @@ export function LaunchWizard() {
 
   function chooseArtwork(file: File | undefined) {
     setPrepared(null);
+    setPreparedWallet("");
     setArtworkError("");
     if (!file) {
       setArtwork(null);
@@ -105,6 +106,7 @@ export function LaunchWizard() {
     event.preventDefault();
     if (!validMetadata || !validWallet || !agreed) return;
     setPrepared(null);
+    setPreparedWallet("");
     setStatus("uploading");
     try {
       const uploaded = await uploadArtwork();
@@ -122,6 +124,7 @@ export function LaunchWizard() {
       });
       if (!response.ok) throw new Error("Preparation failed");
       setPrepared((await response.json()) as PreparedLaunch);
+      setPreparedWallet(address);
       setStatus("idle");
     } catch {
       setStatus("error");
@@ -172,8 +175,8 @@ export function LaunchWizard() {
               </label>
             </div>
             <label>
-              <span>Description <small>{draft.description.length}/280</small></span>
-              <textarea value={draft.description} onChange={(e) => update("description", e.target.value)} maxLength={280} placeholder="Tell the hood what this token is about. Links belong in the fields below." />
+              <span>Description <small>Optional · {draft.description.length}/280</small></span>
+              <textarea value={draft.description} onChange={(e) => update("description", e.target.value)} maxLength={280} placeholder="Optional: tell the hood what this token is about. Links belong in the fields below." />
             </label>
             <label className={`artwork-picker${artwork ? " has-file" : ""}`}>
               <span>Token artwork <em>JPG, PNG or WebP · max 5 MB</em></span>
@@ -195,7 +198,7 @@ export function LaunchWizard() {
               <label><span>X / Twitter <em>Optional</em></span><input value={draft.xUrl} onChange={(e) => update("xUrl", e.target.value)} inputMode="url" placeholder="https://x.com/" /></label>
             </div>
             <div className="form-actions">
-              <span>{validMetadata ? "Looking sharp." : "Name, ticker, 20+ character story, and artwork required."}</span>
+              <span>{validMetadata ? "Looking sharp." : "Name, ticker, and artwork required."}</span>
               <button className="button button-primary" type="button" disabled={!validMetadata} onClick={() => setStep(2)}>Continue <span>→</span></button>
             </div>
           </div>
@@ -260,7 +263,7 @@ export function LaunchWizard() {
               <span>I understand the token, pool, fee beneficiaries, and metadata are irreversible after launch.</span>
             </label>
             <div className="simulation-notice"><span>SIMULATION MODE</span><p>Mainnet broadcast remains disabled until the calibrated curve and contract checks pass the release gate.</p></div>
-            {prepared && (
+            {prepared && preparedWallet === address && (
               <div className="prepared-card" role="status">
                 <div><span>✓</span><strong>Artwork uploaded and launch draft prepared</strong></div>
                 <code>{prepared.checksum}</code>
@@ -281,7 +284,7 @@ export function LaunchWizard() {
       <aside className="launch-preview">
         <span className="preview-label">LIVE PREVIEW</span>
         <div className="preview-art" style={artworkPreview ? { backgroundImage: `url(${artworkPreview})` } : undefined}>
-          {!artworkPreview && <Image className="preview-placeholder-logo" src="/hoodie-logo.jpg" alt="" width={260} height={260} />}
+          {!artworkPreview && <Image className="preview-placeholder-logo" src="/hoodie-logo.jpg" alt="" width={260} height={260} unoptimized />}
         </div>
         <h3>{draft.name || "Your token"}</h3>
         <p className="preview-symbol">${draft.symbol || "TICKER"} / HOODIE</p>

@@ -43,7 +43,7 @@ export default function Home() {
           <div className="orbit orbit-one" />
           <div className="orbit orbit-two" />
           <div className="hero-logo-card">
-            <Image src="/hoodie-logo.jpg" alt="$HOODIE character" width={400} height={400} priority />
+            <Image src="/hoodie-logo.jpg" alt="$HOODIE character" width={400} height={400} priority unoptimized />
             <div className="hero-logo-caption"><strong>80%</strong><span>CREATOR FEES</span></div>
           </div>
           <div className="art-tag tag-left">NO PRESALE</div>
@@ -92,7 +92,7 @@ export default function Home() {
             <span className="step-number">01</span>
             <div className="step-icon">✎</div>
             <h3>Make the token</h3>
-            <p>Add a name, ticker, artwork file, story, and links. Your connected MetaMask account receives the creator fees.</p>
+            <p>Add a name, ticker, and artwork file. A description and links are optional. Your connected MetaMask account receives the creator fees.</p>
           </article>
           <article>
             <span className="step-number">02</span>
