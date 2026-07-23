@@ -316,11 +316,27 @@ async function main() {
         tokenEntity.getController(),
         tokenEntity.getPool(),
       ]);
-    assert.equal(maxBalance, parseEther(product.token.maxWalletTokens));
-    assert.equal(balanceLimitEnd, Number(block.timestamp) + product.token.maxWalletDurationSeconds);
-    assert.equal(balanceLimitActive, true);
-    assert.equal(controller.toLowerCase(), product.token.controller.toLowerCase());
-    assert.equal(tokenPool.toLowerCase(), pool.toLowerCase());
+    const expectedMaxBalance = parseEther(product.token.maxWalletTokens);
+    const expectedBalanceLimitEnd =
+      Number(block.timestamp) + product.token.maxWalletDurationSeconds;
+    const tokenPolicyValid =
+      maxBalance === expectedMaxBalance &&
+      balanceLimitEnd === expectedBalanceLimitEnd &&
+      balanceLimitActive &&
+      controller.toLowerCase() === product.token.controller.toLowerCase() &&
+      tokenPool.toLowerCase() === pool.toLowerCase();
+    addCheck(
+      checks,
+      "token-policy",
+      tokenPolicyValid,
+      [
+        `maxBalance ${maxBalance} expected ${expectedMaxBalance}`,
+        `balanceLimitEnd ${balanceLimitEnd} expected ${expectedBalanceLimitEnd}`,
+        `active ${balanceLimitActive}`,
+        `controller ${controller} expected ${product.token.controller}`,
+        `pool ${tokenPool} expected ${pool}`,
+      ].join("; "),
+    );
 
     const addresses = getAddresses(product.network.chainId);
     const tenMillionTokens = parseEther("10000000");

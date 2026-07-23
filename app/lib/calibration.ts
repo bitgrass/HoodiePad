@@ -6,6 +6,7 @@ export const REQUIRED_CALIBRATION_CHECKS = [
   "launch-created",
   "token-ordering",
   "pool-locked",
+  "token-policy",
   "buy",
   "max-wallet-enforced",
   "max-wallet-expired",
