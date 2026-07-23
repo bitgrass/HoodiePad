@@ -93,7 +93,7 @@ test("reads a confirmed HoodiePad market from canonical onchain state", async ()
     assert.equal(market.name, "Baby Hoodie");
     assert.equal(market.symbol, "BABYHOODIE");
     assert.equal(market.pool, pool);
-    assert.equal(market.creator, creator);
+    assert.equal(market.integrator, creator);
     assert.equal(market.totalSupply, "1000000000");
     assert.equal(market.maxBalance, "20000000");
     assert.equal(market.poolFee, 10_000);

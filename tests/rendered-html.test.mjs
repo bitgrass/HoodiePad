@@ -76,6 +76,8 @@ test("freezes the V1 economic, wallet, and Safe invariants", async () => {
   assert.equal(product.network.chainId, 4663);
   assert.equal(product.contracts.hoodie, "0xC72c01AAB5f5678dc1d6f5C6d2B417d91D402Ba3");
   assert.equal(product.contracts.hoodieEcosystemSafe, "0xAB10Efe787DB2ef3700b94578aeC68b98e0446A7");
+  assert.equal(product.contracts.permit2, "0x000000000022D473030F116dDEE9F6B43aC78BA3");
+  assert.equal(product.contracts.uniswapV3Quoter, "0x33e885ed0ec9bf04ecfb19341582aadcb4c8a9e7");
   assert.equal(product.contracts.weth, "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73");
   assert.equal(product.hoodieReferencePool.poolId, "0x590eb1069a71fe72e3470f094c324513da3691987868a2b355fd8f29713d889b");
   assert.equal(product.hoodieReferencePool.currency0, product.contracts.weth);
@@ -160,6 +162,23 @@ test("rejects malformed deployment confirmation requests without reading the cha
   }), env, ctx);
   assert.equal(response.status, 422);
   assert.match((await response.json()).error, /Invalid deployment confirmation/);
+});
+
+test("rejects malformed in-app swap requests without reading the chain", async () => {
+  const app = await worker();
+  const response = await app.fetch(new Request("http://localhost/api/swap/prepare", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      token: "not-an-address",
+      account: "0x1111111111111111111111111111111111111111",
+      side: "buy",
+      amount: "1",
+      slippageBps: 100,
+    }),
+  }), env, ctx);
+  assert.equal(response.status, 409);
+  assert.match((await response.json()).error, /Address|address/);
 });
 
 test("reports a healthy runtime when persistent object storage is available", async () => {

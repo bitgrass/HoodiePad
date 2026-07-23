@@ -4,6 +4,12 @@ import { tmpdir } from "node:os";
 import { join, resolve, sep } from "node:path";
 import test from "node:test";
 import {
+  decodeAbiParameters,
+  decodeFunctionData,
+  getAddress,
+  parseAbi,
+} from "viem";
+import {
   getCalibrationConfigHash,
   isCalibrationReportApproved,
   REQUIRED_CALIBRATION_CHECKS,
@@ -15,6 +21,7 @@ import {
   runtimeHashMatches,
 } from "../app/lib/protocol";
 import { getReleasePolicy } from "../app/lib/release-policy";
+import { encodeV3ExactInputSwap } from "../app/lib/swap";
 import {
   checkObjectStorage,
   getStoredObject,
@@ -191,4 +198,41 @@ test("keeps Railway clean installs compatible with the pinned Doppler peer", asy
   assert.equal(railway.build.buildCommand, "npm run build");
   assert.equal(railway.deploy.startCommand, "npm run start");
   assert.equal(railway.deploy.healthcheckPath, "/api/health");
+});
+
+test("encodes an exact-input HoodiePad V3 swap with recipient and slippage protection", () => {
+  const recipient = getAddress("0x1111111111111111111111111111111111111111");
+  const hoodie = getAddress("0xC72c01AAB5f5678dc1d6f5C6d2B417d91D402Ba3");
+  const child = getAddress("0x650716844ed8d82B1835C854fD56Fc9ADE772b42");
+  const data = encodeV3ExactInputSwap({
+    recipient,
+    tokenIn: hoodie,
+    tokenOut: child,
+    amountIn: 1_000_000n,
+    minimumOut: 9_000_000n,
+    fee: 10_000,
+    deadline: 1_800_000_000n,
+  });
+  const decoded = decodeFunctionData({
+    abi: parseAbi(["function execute(bytes commands,bytes[] inputs,uint256 deadline) payable"]),
+    data,
+  });
+  assert.equal(decoded.functionName, "execute");
+  assert.equal(decoded.args[0], "0x00");
+  assert.equal(decoded.args[2], 1_800_000_000n);
+  const command = decodeAbiParameters(
+    [
+      { type: "address" },
+      { type: "uint256" },
+      { type: "uint256" },
+      { type: "bytes" },
+      { type: "bool" },
+    ],
+    decoded.args[1][0],
+  );
+  assert.equal(command[0], recipient);
+  assert.equal(command[1], 1_000_000n);
+  assert.equal(command[2], 9_000_000n);
+  assert.match(command[3], new RegExp(`^${hoodie.toLowerCase()}002710${child.slice(2).toLowerCase()}$`));
+  assert.equal(command[4], true);
 });

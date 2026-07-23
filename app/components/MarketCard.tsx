@@ -7,17 +7,24 @@ export type MarketCardProps = {
   creator: string;
   price: string;
   volume: string;
-  progress: number;
   change: string;
+  imageUrl?: string;
+  active: boolean;
+  launchBlock: string;
   tone: "green" | "peach" | "blue" | "violet";
 };
 
 export function MarketCard(props: MarketCardProps) {
   const positive = !props.change.startsWith("-");
+  const creator = `${props.creator.slice(0, 8)}…${props.creator.slice(-6)}`;
   return (
     <Link className="market-card" href={`/token/${props.address}`}>
-      <div className={`token-avatar tone-${props.tone}`} aria-hidden="true">
-        {props.symbol.slice(0, 2)}
+      <div
+        className={`token-avatar tone-${props.tone}${props.imageUrl ? " has-artwork" : ""}`}
+        style={props.imageUrl ? { backgroundImage: `url("${props.imageUrl}")` } : undefined}
+        aria-hidden="true"
+      >
+        {props.imageUrl ? "" : props.symbol.slice(0, 2)}
       </div>
       <div className="market-card-title">
         <div>
@@ -34,19 +41,16 @@ export function MarketCard(props: MarketCardProps) {
           <dd>{props.price} HOODIE</dd>
         </div>
         <div>
-          <dt>24h volume</dt>
+          <dt>Recent volume</dt>
           <dd>{props.volume}</dd>
         </div>
       </dl>
-      <div className="progress-meta">
-        <span>Market forming</span>
-        <strong>{props.progress}%</strong>
+      <div className="market-live-row">
+        <span className={`market-live-dot${props.active ? " is-active" : ""}`} />
+        <strong>{props.active ? "Market active" : "Awaiting first trade"}</strong>
+        <span>Block {props.launchBlock}</span>
       </div>
-      <div className="progress-track">
-        <span style={{ width: `${props.progress}%` }} />
-      </div>
-      <p className="creator-line">by {props.creator}</p>
+      <p className="creator-line">by {creator}</p>
     </Link>
   );
 }
-

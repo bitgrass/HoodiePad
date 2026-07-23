@@ -39,6 +39,9 @@ This file is authoritative for HoodiePad V1. Changes to a frozen value require a
 | Production signer | Connected MetaMask account; no server-side deployment key |
 | Deployment authorization | Exact simulation, passing fork report, external review or explicit owner risk waiver, policy switch, then explicit MetaMask confirmation |
 | Metadata | HoodiePad generates the immutable production metadata URI |
+| Market registry | Canonical Airlock `Create` events, then full HoodiePad invariant validation |
+| Market chart | Canonical V3 `Swap` events; no generated price series |
+| In-app trading | Exact-input Doppler V3 quote, exact-amount Permit2 approval, simulated Universal Router swap, connected MetaMask confirmation |
 | Base | Out of scope |
 
 ## Required launch blockers

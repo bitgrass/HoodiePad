@@ -112,6 +112,14 @@ Then complete these checks:
    canonical Uniswap pool URL, but token search and DEX indexers may not list it
    until the first swap. HoodiePad labels this state `Pool ready` and changes it
    to `Market active` after cumulative V3 fee growth proves a swap occurred.
+9. Open `/explore` and confirm the launch appears from the live Airlock event
+   registry. The production RPC must support chunked historical `eth_getLogs`
+   requests beginning at block `17630000`.
+10. Open the token page, enter a small HOODIE amount, and confirm that the
+    in-app quote loads. For a canary wallet, complete the exact-amount ERC-20
+    and Permit2 approvals, wait for HoodiePad to re-simulate, and then confirm
+    the Universal Router swap in MetaMask. Confirm the chart updates after the
+    swap is final.
 
 ## 5. Rollback and operations
 

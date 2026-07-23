@@ -32,8 +32,10 @@ type WalletContextValue = {
     from: string;
     to: string;
     data: string;
-    gasLimit: string;
+    gasLimit?: string;
+    value?: string;
   }) => Promise<string>;
+  waitForTransaction: (transactionHash: string) => Promise<void>;
 };
 
 const WalletContext = createContext<WalletContextValue | null>(null);
@@ -115,7 +117,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     from: string;
     to: string;
     data: string;
-    gasLimit: string;
+    gasLimit?: string;
+    value?: string;
   }) {
     const provider = metaMaskProvider();
     if (!provider) throw new Error("MetaMask is not installed");
@@ -127,15 +130,18 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     if (chainId !== ROBINHOOD_CHAIN.chainId) {
       throw new Error("MetaMask is not connected to Robinhood Chain");
     }
+    const parameters: Record<string, string> = {
+      from: address,
+      to: transaction.to,
+      data: transaction.data,
+      value: transaction.value ?? "0x0",
+    };
+    if (transaction.gasLimit) {
+      parameters.gas = `0x${BigInt(transaction.gasLimit).toString(16)}`;
+    }
     const hash = await provider.request({
       method: "eth_sendTransaction",
-      params: [{
-        from: address,
-        to: transaction.to,
-        data: transaction.data,
-        gas: `0x${BigInt(transaction.gasLimit).toString(16)}`,
-        value: "0x0",
-      }],
+      params: [parameters],
     });
     if (typeof hash !== "string" || !/^0x[a-fA-F0-9]{64}$/.test(hash)) {
       throw new Error("MetaMask did not return a transaction hash");
@@ -143,7 +149,22 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     return hash;
   }
 
-  const value = { address, status, connect, sendTransaction };
+  async function waitForTransaction(transactionHash: string) {
+    const provider = metaMaskProvider();
+    if (!provider) throw new Error("MetaMask is not installed");
+    for (let attempt = 0; attempt < 90; attempt += 1) {
+      const receipt = await provider.request({
+        method: "eth_getTransactionReceipt",
+        params: [transactionHash],
+      }) as { status?: string } | null;
+      if (receipt?.status === "0x1") return;
+      if (receipt?.status === "0x0") throw new Error("The transaction reverted");
+      await new Promise((resolve) => window.setTimeout(resolve, 2_000));
+    }
+    throw new Error("Transaction confirmation timed out");
+  }
+
+  const value = { address, status, connect, sendTransaction, waitForTransaction };
   return <WalletContext.Provider value={value}>{children}</WalletContext.Provider>;
 }
 

@@ -1,6 +1,8 @@
 import Link from "next/link";
 import product from "../../../config/hoodiepad-v1.json";
 import { AppShell } from "../../components/AppShell";
+import { MarketChart } from "../../components/MarketChart";
+import { SwapPanel } from "../../components/SwapPanel";
 import { readHoodiePadMarket, type HoodiePadMarket } from "../../lib/market";
 
 export const revalidate = 0;
@@ -156,21 +158,12 @@ export default async function TokenPage({
               {market.hasSwapActivity ? "ACTIVE · ONCHAIN" : "POOL READY"}
             </span>
           </div>
-          <div className="live-market-summary">
-            <span>CANONICAL MARKET</span>
-            <h2>${market.symbol} / HOODIE</h2>
-            <p>
-              This is the exact locked pool created by Doppler Airlock. HoodiePad reads these
-              values directly from Robinhood Chain.
-            </p>
-            <div>
-              <a href={explorerPool} target="_blank" rel="noreferrer">
-                Pool {shorten(market.pool)} ↗
-              </a>
-              <a href={uniswapPool} target="_blank" rel="noreferrer">
-                Open on Uniswap ↗
-              </a>
-            </div>
+          <MarketChart token={market.address} initialPrice={market.hoodiePerToken} />
+          <div className="chart-pool-links">
+            <a href={explorerPool} target="_blank" rel="noreferrer">
+              Pool {shorten(market.pool)} ↗
+            </a>
+            <span>Live Swap events · Robinhood Chain</span>
           </div>
           <div className="token-stat-row">
             <div><span>Swap history</span><strong>{market.hasSwapActivity ? "Detected" : "None yet"}</strong></div>
@@ -180,24 +173,7 @@ export default async function TokenPage({
           </div>
         </div>
 
-        <aside className="trade-panel live-details-panel">
-          <span className="preview-label">CONTRACT DETAILS</span>
-          <dl>
-            <div><dt>Token</dt><dd><a href={explorerToken} target="_blank" rel="noreferrer">{shorten(market.address)} ↗</a></dd></div>
-            <div><dt>Pool</dt><dd><a href={explorerPool} target="_blank" rel="noreferrer">{shorten(market.pool)} ↗</a></dd></div>
-            <div><dt>Creator</dt><dd>{shorten(market.creator)}</dd></div>
-            <div><dt>Current tick</dt><dd>{market.tick}</dd></div>
-            <div><dt>Pool locked</dt><dd>{market.poolLocked ? "Yes" : "No"}</dd></div>
-            <div><dt>DEX discovery</dt><dd>{market.hasSwapActivity ? "Triggered" : "Awaiting first swap"}</dd></div>
-          </dl>
-          <a className="button button-primary full-width" href={uniswapPool} target="_blank" rel="noreferrer">
-            {market.hasSwapActivity ? "Trade on Uniswap ↗" : "Make the first trade ↗"}
-          </a>
-          <p className="trade-warning">
-            This link opens the exact canonical pool, so it works before token search and
-            third-party indexers catch up.
-          </p>
-        </aside>
+        <SwapPanel token={market.address} symbol={market.symbol} poolUrl={uniswapPool} />
       </section>
 
       <section className="market-info section-frame">

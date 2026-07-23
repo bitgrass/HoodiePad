@@ -2,9 +2,17 @@ import Image from "next/image";
 import Link from "next/link";
 import { AppShell } from "./components/AppShell";
 import { MarketCard } from "./components/MarketCard";
-import { previewMarkets } from "./data";
+import {
+  readHoodiePadLaunches,
+  summarizeHoodiePadLaunches,
+} from "./lib/launches";
 
-export default function Home() {
+export const revalidate = 0;
+
+export default async function Home() {
+  const launches = await readHoodiePadLaunches().catch(() => []);
+  const markets = summarizeHoodiePadLaunches(launches).slice(0, 3);
+
   return (
     <AppShell>
       <section className="hero section-frame">
@@ -68,12 +76,16 @@ export default function Home() {
           </div>
           <Link href="/explore">View all markets ↗</Link>
         </div>
-        <div className="market-grid">
-          {previewMarkets.slice(0, 3).map((market) => (
-            <MarketCard key={market.address} {...market} />
-          ))}
-        </div>
-        <p className="preview-note">Preview markets shown for interface testing.</p>
+        {markets.length > 0 ? (
+          <div className="market-grid">
+            {markets.map((market) => <MarketCard key={market.address} {...market} />)}
+          </div>
+        ) : (
+          <div className="live-empty-state">
+            <strong>No validated HoodiePad launches found yet.</strong>
+            <p>Markets appear here automatically after their Airlock launch confirms.</p>
+          </div>
+        )}
       </section>
 
       <section className="how-section section-frame">

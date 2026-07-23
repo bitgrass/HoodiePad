@@ -15,6 +15,8 @@
     "lockableV3Initializer": "0xde8886A0019Ea060B8378Ee37b8A23b8117F29A3",
     "noOpGovernanceFactory": "0x85f37f74Ef2478A770318bc810177a9835911aD7",
     "noOpMigrator": "0xba2F330EDb16cD8056f5988d8CE19BbC63475A0e",
+    "uniswapV3Quoter": "0x33e885ed0ec9bf04ecfb19341582aadcb4c8a9e7",
+    "permit2": "0x000000000022D473030F116dDEE9F6B43aC78BA3",
     "uniswapV4PoolManager": "0x8366a39cc670b4001a1121b8f6a443a643e40951",
     "uniswapV4StateView": "0xf3334192d15450cdd385c8b70e03f9a6bd9e673b",
     "uniswapUniversalRouter": "0x8876789976decbfcbbbe364623c63652db8c0904"
@@ -25,6 +27,12 @@
     "currency0": "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
     "currency1": "0xC72c01AAB5f5678dc1d6f5C6d2B417d91D402Ba3",
     "priceMeaning": "HOODIE per WETH"
+  },
+  "discovery": {
+    "launchStartBlock": "17630000",
+    "refreshSeconds": 15,
+    "chartLookbackBlocks": 10000,
+    "logChunkSize": 5000
   },
   "runtimeHashSnapshot": {
     "chainId": 4663,

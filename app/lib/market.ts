@@ -49,7 +49,7 @@ export type HoodiePadMarket = {
   imageUrl?: string;
   websiteUrl?: string;
   xUrl?: string;
-  creator: Address;
+  integrator: Address;
   pool: Address;
   poolFee: number;
   poolLiquidity: string;
@@ -205,7 +205,7 @@ export async function readHoodiePadMarket(
     imageUrl: metadataImageUrl(metadata),
     websiteUrl: safeHttpUrl(metadata?.external_url),
     xUrl: safeHttpUrl(metadata?.properties?.x_url),
-    creator: getAddress(assetData[9]),
+    integrator: getAddress(assetData[9]),
     pool,
     poolFee: Number(poolFee),
     poolLiquidity: poolLiquidity.toString(),
