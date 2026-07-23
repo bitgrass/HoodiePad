@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { WalletProvider } from "./components/WalletProvider";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -13,25 +14,18 @@ export const metadata: Metadata = {
     description:
       "Fixed-supply token markets paired with HOODIE on Robinhood Chain.",
     type: "website",
-    images: [
-      {
-        url: "/og.png",
-        width: 1536,
-        height: 1024,
-        alt: "HoodiePad — The hood stays on",
-      },
-    ],
+    images: [{ url: "/hoodie-logo.jpg", width: 400, height: 400, alt: "HoodiePad logo" }],
   },
   twitter: {
     card: "summary_large_image",
-    images: ["/og.png"],
+    images: ["/hoodie-logo.jpg"],
   },
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body><WalletProvider>{children}</WalletProvider></body>
     </html>
   );
 }

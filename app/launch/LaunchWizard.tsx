@@ -1,15 +1,16 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import Image from "next/image";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import { WalletButton } from "../components/WalletButton";
+import { useWallet } from "../components/WalletProvider";
 
 type Draft = {
   name: string;
   symbol: string;
   description: string;
-  imageUrl: string;
   website: string;
   xUrl: string;
-  payoutWallet: string;
 };
 
 type PreparedLaunch = {
@@ -19,33 +20,54 @@ type PreparedLaunch = {
   blockers: string[];
 };
 
+type UploadedArtwork = {
+  key: string;
+  url: string;
+  sha256: string;
+};
+
 const initialDraft: Draft = {
   name: "",
   symbol: "",
   description: "",
-  imageUrl: "",
   website: "",
   xUrl: "",
-  payoutWallet: "",
 };
 
 const addressPattern = /^0x[a-fA-F0-9]{40}$/;
+const supportedArtworkTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
+const maxArtworkBytes = 5 * 1024 * 1024;
+const ecosystemSafe = "0xAB10Efe787DB2ef3700b94578aeC68b98e0446A7";
+
+function shorten(address: string) {
+  return `${address.slice(0, 8)}…${address.slice(-6)}`;
+}
 
 export function LaunchWizard() {
+  const { address } = useWallet();
   const [step, setStep] = useState(1);
   const [draft, setDraft] = useState(initialDraft);
+  const [artwork, setArtwork] = useState<File | null>(null);
+  const [artworkError, setArtworkError] = useState("");
   const [agreed, setAgreed] = useState(false);
-  const [status, setStatus] = useState<"idle" | "preparing" | "error">("idle");
+  const [status, setStatus] = useState<"idle" | "uploading" | "preparing" | "error">("idle");
   const [prepared, setPrepared] = useState<PreparedLaunch | null>(null);
+
+  const artworkPreview = useMemo(() => (artwork ? URL.createObjectURL(artwork) : ""), [artwork]);
+  useEffect(() => () => {
+    if (artworkPreview) URL.revokeObjectURL(artworkPreview);
+  }, [artworkPreview]);
+  useEffect(() => setPrepared(null), [address]);
 
   const validMetadata = useMemo(
     () =>
       draft.name.trim().length >= 2 &&
       /^[A-Za-z0-9]{2,10}$/.test(draft.symbol) &&
-      draft.description.trim().length >= 20,
-    [draft],
+      draft.description.trim().length >= 20 &&
+      artwork !== null,
+    [artwork, draft],
   );
-  const validWallet = addressPattern.test(draft.payoutWallet);
+  const validWallet = addressPattern.test(address);
 
   function update<K extends keyof Draft>(key: K, value: Draft[K]) {
     setPrepared(null);
@@ -55,16 +77,48 @@ export function LaunchWizard() {
     }));
   }
 
+  function chooseArtwork(file: File | undefined) {
+    setPrepared(null);
+    setArtworkError("");
+    if (!file) {
+      setArtwork(null);
+      return;
+    }
+    if (!supportedArtworkTypes.has(file.type) || file.size > maxArtworkBytes || file.size === 0) {
+      setArtwork(null);
+      setArtworkError("Choose a JPG, PNG, or WebP image no larger than 5 MB.");
+      return;
+    }
+    setArtwork(file);
+  }
+
+  async function uploadArtwork() {
+    if (!artwork) throw new Error("Artwork is required");
+    const formData = new FormData();
+    formData.append("artwork", artwork);
+    const response = await fetch("/api/artwork", { method: "POST", body: formData });
+    if (!response.ok) throw new Error("Artwork upload failed");
+    return (await response.json()) as UploadedArtwork;
+  }
+
   async function prepareLaunch(event: FormEvent) {
     event.preventDefault();
     if (!validMetadata || !validWallet || !agreed) return;
-    setStatus("preparing");
     setPrepared(null);
+    setStatus("uploading");
     try {
+      const uploaded = await uploadArtwork();
+      setStatus("preparing");
       const response = await fetch("/api/launch/prepare", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(draft),
+        body: JSON.stringify({
+          ...draft,
+          artworkKey: uploaded.key,
+          artworkUrl: uploaded.url,
+          artworkSha256: uploaded.sha256,
+          payoutWallet: address,
+        }),
       });
       if (!response.ok) throw new Error("Preparation failed");
       setPrepared((await response.json()) as PreparedLaunch);
@@ -79,7 +133,7 @@ export function LaunchWizard() {
       <aside className="launch-steps" aria-label="Launch progress">
         {[
           [1, "Token details", "Name the thing"],
-          [2, "Creator wallet", "Route the 80%"],
+          [2, "Connected wallet", "Route the 80%"],
           [3, "Review launch", "Know what you sign"],
         ].map(([number, label, hint]) => (
           <button
@@ -106,7 +160,7 @@ export function LaunchWizard() {
           <div className="form-step">
             <p className="step-kicker">Step 1 of 3</p>
             <h2>Give the hood a name.</h2>
-            <p className="form-intro">Metadata is public and immutable once the token launches.</p>
+            <p className="form-intro">Choose the token image directly from your device. HoodiePad uploads it for you.</p>
             <div className="field-grid two-columns">
               <label>
                 <span>Token name</span>
@@ -121,16 +175,27 @@ export function LaunchWizard() {
               <span>Description <small>{draft.description.length}/280</small></span>
               <textarea value={draft.description} onChange={(e) => update("description", e.target.value)} maxLength={280} placeholder="Tell the hood what this token is about. Links belong in the fields below." />
             </label>
-            <label>
-              <span>Artwork URL <em>IPFS or HTTPS</em></span>
-              <input value={draft.imageUrl} onChange={(e) => update("imageUrl", e.target.value)} inputMode="url" placeholder="ipfs://…" />
+            <label className={`artwork-picker${artwork ? " has-file" : ""}`}>
+              <span>Token artwork <em>JPG, PNG or WebP · max 5 MB</em></span>
+              <input
+                className="artwork-input"
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={(event) => chooseArtwork(event.target.files?.[0])}
+              />
+              <span className="artwork-dropzone">
+                {artworkPreview ? <Image src={artworkPreview} alt="Selected token artwork preview" width={56} height={56} unoptimized /> : <i>+</i>}
+                <strong>{artwork ? artwork.name : "Choose token image"}</strong>
+                <small>{artwork ? `${(artwork.size / 1024).toFixed(0)} KB · click to replace` : "Select a file from your device"}</small>
+              </span>
             </label>
+            {artworkError && <p className="form-error">{artworkError}</p>}
             <div className="field-grid two-columns">
               <label><span>Website <em>Optional</em></span><input value={draft.website} onChange={(e) => update("website", e.target.value)} inputMode="url" placeholder="https://" /></label>
               <label><span>X / Twitter <em>Optional</em></span><input value={draft.xUrl} onChange={(e) => update("xUrl", e.target.value)} inputMode="url" placeholder="https://x.com/" /></label>
             </div>
             <div className="form-actions">
-              <span>{validMetadata ? "Looking sharp." : "Name, ticker, and 20+ character story required."}</span>
+              <span>{validMetadata ? "Looking sharp." : "Name, ticker, 20+ character story, and artwork required."}</span>
               <button className="button button-primary" type="button" disabled={!validMetadata} onClick={() => setStep(2)}>Continue <span>→</span></button>
             </div>
           </div>
@@ -139,21 +204,31 @@ export function LaunchWizard() {
         {step === 2 && (
           <div className="form-step">
             <p className="step-kicker">Step 2 of 3</p>
-            <h2>Where should the 80% go?</h2>
-            <p className="form-intro">The creator beneficiary is immutable. Team launches should use a Safe, not one person&apos;s everyday wallet.</p>
-            <label className="large-field">
-              <span>Creator fee-recipient wallet</span>
-              <input value={draft.payoutWallet} onChange={(e) => update("payoutWallet", e.target.value.trim())} placeholder="0x…" spellCheck={false} />
-            </label>
+            <h2>Your wallet gets the 80%.</h2>
+            <p className="form-intro">The connected MetaMask account automatically becomes the immutable creator fee recipient. It cannot be replaced with a different address in this launch.</p>
+            {validWallet ? (
+              <div className="creator-wallet-card">
+                <span className="wallet-fox" aria-hidden="true">M</span>
+                <div><small>Connected MetaMask · creator fee recipient</small><code>{address}</code></div>
+                <strong>80%</strong>
+              </div>
+            ) : (
+              <div className="wallet-connect-panel">
+                <strong>Connect MetaMask to continue</strong>
+                <p>HoodiePad will switch MetaMask to Robinhood Chain and use that account as the creator beneficiary.</p>
+                <WalletButton compact />
+              </div>
+            )}
             <div className={`address-check ${validWallet ? "valid" : ""}`}>
               <span>{validWallet ? "✓" : "!"}</span>
-              <div><strong>{validWallet ? "Valid EVM address" : "A complete 0x address is required"}</strong><p>This address receives 80% of canonical pool fees in both assets.</p></div>
+              <div><strong>{validWallet ? "Creator recipient locked to connected wallet" : "MetaMask connection required"}</strong><p>This account receives 80% of canonical pool fees in both assets.</p></div>
             </div>
             <div className="split-preview compact">
-              <div><span>Creator wallet</span><strong>80%</strong></div>
-              <div><span>HOODIE ecosystem</span><strong>15%</strong></div>
+              <div><span>Connected creator wallet</span><strong>80%</strong></div>
+              <div><span>HOODIE ecosystem Safe</span><strong>15%</strong></div>
               <div><span>Doppler</span><strong>5%</strong></div>
             </div>
+            <div className="safe-address"><span>Ecosystem Safe</span><code>{ecosystemSafe}</code></div>
             <div className="form-actions">
               <button className="back-button" type="button" onClick={() => setStep(1)}>← Back</button>
               <button className="button button-primary" type="button" disabled={!validWallet} onClick={() => setStep(3)}>Review launch <span>→</span></button>
@@ -164,38 +239,40 @@ export function LaunchWizard() {
         {step === 3 && (
           <div className="form-step review-step">
             <p className="step-kicker">Step 3 of 3</p>
-            <h2>Review before the wallet asks.</h2>
+            <h2>Review before MetaMask asks.</h2>
             <div className="review-token">
-              <div className="review-avatar" style={draft.imageUrl ? { backgroundImage: `url(${draft.imageUrl})` } : undefined}>{draft.imageUrl ? "" : draft.symbol.slice(0, 2)}</div>
+              <div className="review-avatar" style={artworkPreview ? { backgroundImage: `url(${artworkPreview})` } : undefined}>{artworkPreview ? "" : draft.symbol.slice(0, 2)}</div>
               <div><strong>{draft.name}</strong><span>${draft.symbol} · 1,000,000,000 supply</span></div>
               <button type="button" onClick={() => setStep(1)}>Edit</button>
             </div>
             <div className="review-rules">
               <div><span>Network</span><strong>Robinhood Chain</strong></div>
               <div><span>Canonical pair</span><strong>${draft.symbol} / HOODIE</strong></div>
+              <div><span>Creator recipient</span><strong>{shorten(address)}</strong></div>
+              <div><span>Ecosystem Safe</span><strong>{shorten(ecosystemSafe)}</strong></div>
               <div><span>Trading fee</span><strong>1.00%</strong></div>
               <div><span>Creator share</span><strong>80%</strong></div>
-              <div><span>Creator allocation</span><strong>0%</strong></div>
               <div><span>Max wallet</span><strong>2% for 24h</strong></div>
               <div><span>Migration</span><strong>None</strong></div>
-              <div><span>Mechanism</span><strong>Lockable V3</strong></div>
             </div>
             <label className="confirm-check">
               <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} />
               <span>I understand the token, pool, fee beneficiaries, and metadata are irreversible after launch.</span>
             </label>
-            <div className="simulation-notice"><span>SIMULATION MODE</span><p>Mainnet broadcast is intentionally disabled until the treasury Safe and calibrated curve pass the release gate.</p></div>
+            <div className="simulation-notice"><span>SIMULATION MODE</span><p>Mainnet broadcast remains disabled until the calibrated curve and contract checks pass the release gate.</p></div>
             {prepared && (
               <div className="prepared-card" role="status">
-                <div><span>✓</span><strong>Launch draft prepared</strong></div>
+                <div><span>✓</span><strong>Artwork uploaded and launch draft prepared</strong></div>
                 <code>{prepared.checksum}</code>
                 <ul>{prepared.blockers.map((blocker) => <li key={blocker}>{blocker}</li>)}</ul>
               </div>
             )}
-            {status === "error" && <p className="form-error">Could not prepare this draft. Check the fields and try again.</p>}
+            {status === "error" && <p className="form-error">Could not upload the artwork or prepare this draft. Try again.</p>}
             <div className="form-actions">
               <button className="back-button" type="button" onClick={() => setStep(2)}>← Back</button>
-              <button className="button button-primary" type="submit" disabled={!agreed || status === "preparing"}>{status === "preparing" ? "Preparing…" : "Prepare simulation"} <span>↗</span></button>
+              <button className="button button-primary" type="submit" disabled={!agreed || !validWallet || status === "uploading" || status === "preparing"}>
+                {status === "uploading" ? "Uploading artwork…" : status === "preparing" ? "Preparing…" : "Prepare simulation"} <span>↗</span>
+              </button>
             </div>
           </div>
         )}
@@ -203,8 +280,8 @@ export function LaunchWizard() {
 
       <aside className="launch-preview">
         <span className="preview-label">LIVE PREVIEW</span>
-        <div className="preview-art" style={draft.imageUrl ? { backgroundImage: `url(${draft.imageUrl})` } : undefined}>
-          {!draft.imageUrl && <div className="preview-hood">•‿•</div>}
+        <div className="preview-art" style={artworkPreview ? { backgroundImage: `url(${artworkPreview})` } : undefined}>
+          {!artworkPreview && <Image className="preview-placeholder-logo" src="/hoodie-logo.jpg" alt="" width={260} height={260} />}
         </div>
         <h3>{draft.name || "Your token"}</h3>
         <p className="preview-symbol">${draft.symbol || "TICKER"} / HOODIE</p>
@@ -214,4 +291,3 @@ export function LaunchWizard() {
     </div>
   );
 }
-

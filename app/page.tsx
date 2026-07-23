@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { AppShell } from "./components/AppShell";
 import { MarketCard } from "./components/MarketCard";
@@ -41,13 +42,9 @@ export default function Home() {
         <div className="hero-art" aria-label="HoodiePad launch market illustration">
           <div className="orbit orbit-one" />
           <div className="orbit orbit-two" />
-          <div className="hood-figure">
-            <div className="hood-shadow" />
-            <div className="hood-head"><span>•‿•</span></div>
-            <div className="hood-body">
-              <strong>80%</strong>
-              <small>CREATOR FEES</small>
-            </div>
+          <div className="hero-logo-card">
+            <Image src="/hoodie-logo.jpg" alt="$HOODIE character" width={400} height={400} priority />
+            <div className="hero-logo-caption"><strong>80%</strong><span>CREATOR FEES</span></div>
           </div>
           <div className="art-tag tag-left">NO PRESALE</div>
           <div className="art-tag tag-right">PAIRED W/ $HOODIE</div>
@@ -95,7 +92,7 @@ export default function Home() {
             <span className="step-number">01</span>
             <div className="step-icon">✎</div>
             <h3>Make the token</h3>
-            <p>Add a name, ticker, artwork, story, links, and creator payout wallet.</p>
+            <p>Add a name, ticker, artwork file, story, and links. Your connected MetaMask account receives the creator fees.</p>
           </article>
           <article>
             <span className="step-number">02</span>
@@ -143,4 +140,3 @@ export default function Home() {
     </AppShell>
   );
 }
-

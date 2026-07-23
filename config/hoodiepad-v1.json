@@ -8,6 +8,7 @@
   },
   "contracts": {
     "hoodie": "0xC72c01AAB5f5678dc1d6f5C6d2B417d91D402Ba3",
+    "hoodieEcosystemSafe": "0xAB10Efe787DB2ef3700b94578aeC68b98e0446A7",
     "airlock": "0xeb7C034704eF8Dcd2D32324c1545f62fB4aD0862",
     "dopplerERC20V1Factory": "0x1B37D3a72082029c44B35B604Ea473617580b69a",
     "lockableV3Initializer": "0xde8886A0019Ea060B8378Ee37b8A23b8117F29A3",
@@ -42,4 +43,3 @@
     "dopplerSdk": "1.0.28"
   }
 }
-

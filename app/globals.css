@@ -64,9 +64,7 @@ button { color: inherit; }
 }
 
 .brand { display: inline-flex; width: fit-content; align-items: center; gap: 10px; font-size: 16px; font-weight: 950; letter-spacing: -.04em; }
-.brand-mark { width: 35px; height: 35px; display: grid; place-items: center; position: relative; overflow: hidden; border: 2px solid var(--ink); border-radius: 50% 50% 46% 46%; background: var(--acid); transform: rotate(-5deg); box-shadow: 2px 2px 0 var(--ink); }
-.brand-mark::before { content: ""; position: absolute; width: 27px; height: 28px; top: 5px; border: 2px solid var(--ink); border-radius: 50% 50% 40% 40%; background: #f8d8bb; }
-.brand-face { z-index: 1; margin-top: 4px; font: 700 10px/1 monospace; letter-spacing: -2px; }
+.brand-logo { width: 40px; height: 40px; object-fit: cover; border: 2px solid var(--ink); border-radius: 50%; background: white; box-shadow: 2px 2px 0 var(--ink); }
 
 .site-header nav { display: flex; align-items: center; gap: 30px; font-size: 14px; font-weight: 750; }
 .site-header nav a { position: relative; padding: 12px 0; }
@@ -75,6 +73,7 @@ button { color: inherit; }
 
 .wallet-button { justify-self: end; min-width: 150px; height: 48px; border: 2px solid var(--ink); border-radius: 999px; background: var(--acid); box-shadow: 3px 3px 0 var(--ink); display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 13px; font-weight: 850; cursor: pointer; transition: transform .16s, box-shadow .16s; }
 .wallet-button:hover { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--ink); }
+.wallet-button-compact { width: fit-content; min-width: 180px; justify-self: auto; }
 .wallet-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ink); opacity: .5; }
 .wallet-dot.is-live { background: #39984b; opacity: 1; box-shadow: 0 0 0 3px rgba(57,152,75,.2); }
 
@@ -104,6 +103,11 @@ button { color: inherit; }
 
 .hero-art { position: relative; overflow: hidden; border-left: 2px solid var(--line); background: var(--acid); isolation: isolate; }
 .hero-art::before { content: ""; position: absolute; inset: 0; opacity: .25; background-image: radial-gradient(var(--ink) 1.2px, transparent 1.2px); background-size: 20px 20px; mask-image: linear-gradient(to bottom, transparent, black 20%, black 80%, transparent); }
+.hero-logo-card { position: absolute; z-index: 2; width: min(400px, 72%); left: 50%; top: 50%; transform: translate(-50%, -50%) rotate(2deg); border: 4px solid var(--ink); border-radius: 20px; background: white; box-shadow: 12px 12px 0 rgba(29,26,22,.3); overflow: hidden; }
+.hero-logo-card > img { display: block; width: 100%; height: auto; }
+.hero-logo-caption { min-height: 76px; padding: 10px 18px; display: flex; align-items: center; justify-content: space-between; gap: 14px; border-top: 4px solid var(--ink); background: var(--paper); }
+.hero-logo-caption strong { color: var(--acid); font-size: 45px; line-height: 1; letter-spacing: -.07em; -webkit-text-stroke: 1.5px var(--ink); text-shadow: 2px 2px 0 var(--ink); }
+.hero-logo-caption span { font: 900 12px/1.1 "Courier New", monospace; letter-spacing: .08em; text-align: right; }
 .orbit { position: absolute; border: 2px solid var(--ink); border-radius: 50%; opacity: .45; }
 .orbit-one { width: 520px; height: 520px; left: 35px; top: 65px; }
 .orbit-two { width: 370px; height: 370px; left: 110px; top: 140px; border-style: dashed; transform: rotate(22deg); }
@@ -262,6 +266,14 @@ button { color: inherit; }
 .launch-form input { height: 49px; padding: 0 14px; }
 .launch-form textarea { min-height: 105px; padding: 13px 14px; resize: vertical; line-height: 1.45; }
 .launch-form input:focus, .launch-form textarea:focus { border-color: var(--ink); box-shadow: 0 0 0 3px rgba(184,245,0,.45); }
+.artwork-picker { cursor: pointer; }
+.artwork-input { position: absolute; width: 1px !important; height: 1px !important; opacity: 0; pointer-events: none; }
+.artwork-dropzone { min-height: 78px; padding: 10px 13px; display: grid !important; grid-template-columns: 56px 1fr; grid-template-rows: 1fr 1fr; column-gap: 13px; justify-content: initial !important; border: 1.5px dashed #8e8679; border-radius: 9px; background: #fffdf7; transition: border .16s, box-shadow .16s, background .16s; }
+.artwork-picker:hover .artwork-dropzone, .artwork-picker:focus-within .artwork-dropzone { border-color: var(--ink); background: var(--acid-soft); box-shadow: 0 0 0 3px rgba(184,245,0,.35); }
+.artwork-dropzone img, .artwork-dropzone > i { grid-row: 1 / 3; width: 56px; height: 56px; border: 1.5px solid var(--ink); border-radius: 8px; object-fit: cover; }
+.artwork-dropzone > i { display: grid; place-items: center; background: var(--acid); color: var(--ink); font-size: 26px; font-style: normal; font-weight: 900; }
+.artwork-dropzone strong { align-self: end; overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.artwork-dropzone small { align-self: start; color: var(--muted); font-size: 9px; }
 .ticker-input { display: flex; border: 1.5px solid #8e8679; border-radius: 8px; background: #fffdf7; }
 .ticker-input:focus-within { border-color: var(--ink); box-shadow: 0 0 0 3px rgba(184,245,0,.45); }
 .ticker-input i { width: 38px; display: grid; place-items: center; border-right: 1px solid #c3bcaf; color: var(--muted); font-style: normal; }
@@ -270,6 +282,18 @@ button { color: inherit; }
 .form-actions > span { color: var(--muted); font-size: 10px; }
 .back-button { border: 0; background: transparent; font-size: 12px; font-weight: 800; cursor: pointer; }
 .large-field { margin-top: 14px; }
+.creator-wallet-card { margin: 10px 0 14px; padding: 16px; display: grid; grid-template-columns: 42px 1fr auto; gap: 12px; align-items: center; border: 1.5px solid var(--ink); border-radius: 10px; background: var(--acid-soft); box-shadow: 3px 3px 0 var(--ink); }
+.wallet-fox { width: 42px; height: 42px; display: grid; place-items: center; border: 1.5px solid var(--ink); border-radius: 10px; background: #f6851b; color: white; font-weight: 950; }
+.creator-wallet-card small, .creator-wallet-card code { display: block; }
+.creator-wallet-card small { margin-bottom: 6px; color: var(--muted); font-size: 9px; }
+.creator-wallet-card code { max-width: 390px; overflow: hidden; font-size: 10px; text-overflow: ellipsis; }
+.creator-wallet-card > strong { font-size: 21px; }
+.wallet-connect-panel { margin: 10px 0 14px; padding: 18px; border: 1.5px solid var(--ink); border-radius: 10px; background: #fffdf7; }
+.wallet-connect-panel > strong { font-size: 14px; }
+.wallet-connect-panel > p { max-width: 520px; margin: 7px 0 15px; color: var(--muted); font-size: 10px; line-height: 1.5; }
+.safe-address { margin: -14px 0 20px; padding: 10px 12px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 1px solid #b8b0a4; border-radius: 7px; }
+.safe-address span { color: var(--muted); font-size: 9px; }
+.safe-address code { min-width: 0; overflow: hidden; font-size: 9px; text-overflow: ellipsis; }
 .address-check { padding: 14px; display: flex; gap: 12px; border: 1px solid #b8b0a4; border-radius: 9px; background: #eee8dc; }
 .address-check > span { flex: 0 0 28px; height: 28px; display: grid; place-items: center; border: 1.5px solid var(--ink); border-radius: 50%; background: var(--peach); font-weight: 900; }
 .address-check.valid > span { background: var(--acid); }
@@ -308,6 +332,7 @@ button { color: inherit; }
 .launch-preview { min-width: 0; padding: 22px; border-left: 2px solid var(--ink); background: var(--acid); }
 .preview-label { font: 900 8px/1 "Courier New", monospace; letter-spacing: .1em; }
 .preview-art { aspect-ratio: 1; margin-top: 14px; display: grid; place-items: center; border: 2px solid var(--ink); border-radius: 12px; background: #5c5b56; background-size: cover; background-position: center; box-shadow: 4px 4px 0 var(--ink); }
+.preview-placeholder-logo { width: 72%; height: 72%; object-fit: cover; border: 2px solid var(--ink); border-radius: 50%; box-shadow: 4px 4px 0 var(--ink); }
 .preview-hood { width: 92px; height: 105px; display: grid; place-items: center; border: 3px solid var(--paper); border-radius: 50% 50% 42% 42%; background: var(--ink); color: var(--paper); font: 900 16px/1 monospace; letter-spacing: -3px; }
 .launch-preview h3 { margin: 25px 0 4px; overflow-wrap: anywhere; font-size: 23px; letter-spacing: -.05em; }
 .preview-symbol { margin: 0 0 16px !important; color: var(--ink) !important; font: 900 11px/1 "Courier New", monospace !important; }
@@ -375,7 +400,7 @@ button { color: inherit; }
   .section-frame, .site-header, .site-footer { width: min(100% - 22px, 1180px); }
   .site-header { height: 72px; }
   .brand { font-size: 14px; }
-  .brand-mark { width: 31px; height: 31px; }
+  .brand-logo { width: 34px; height: 34px; }
   .wallet-button { min-width: 128px; height: 43px; font-size: 11px; }
   .hero-copy { padding: 65px 24px 35px; }
   .hero h1 { font-size: clamp(54px, 18vw, 76px); }
@@ -385,7 +410,7 @@ button { color: inherit; }
   .contract-strip { flex-wrap: wrap; }
   .contract-strip a { margin-left: 0; }
   .hero-art { min-height: 500px; }
-  .hood-figure { transform: translate(-50%, -50%) rotate(3deg) scale(.86); }
+  .hero-logo-card { width: min(360px, 76%); }
   .stats-bar { grid-template-columns: repeat(2, 1fr); }
   .stats-bar div { min-height: 95px; border-bottom: 1px solid #5d594f; }
   .stats-bar div:last-child { grid-column: 1 / -1; }
@@ -421,4 +446,3 @@ button { color: inherit; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
-
