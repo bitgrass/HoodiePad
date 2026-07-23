@@ -85,3 +85,7 @@ transactions expire after ten minutes so the 24-hour wallet-limit window begins
 close to the actual launch time.
 
 Never store a private key in this repository. Use a human-controlled wallet or Safe for approved production actions.
+
+For the external-review evidence, activation gates, MetaMask canary, onchain
+checks, and kill switch, follow
+[`docs/runbooks/mainnet-canary.md`](docs/runbooks/mainnet-canary.md).
