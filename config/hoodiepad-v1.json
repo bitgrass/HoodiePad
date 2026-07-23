@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "network": {
+    "name": "Robinhood Chain",
+    "chainId": 4663,
+    "rpcUrl": "https://rpc.mainnet.chain.robinhood.com",
+    "explorerUrl": "https://robinhoodchain.blockscout.com"
+  },
+  "contracts": {
+    "hoodie": "0xC72c01AAB5f5678dc1d6f5C6d2B417d91D402Ba3",
+    "airlock": "0xeb7C034704eF8Dcd2D32324c1545f62fB4aD0862",
+    "dopplerERC20V1Factory": "0x1B37D3a72082029c44B35B604Ea473617580b69a",
+    "lockableV3Initializer": "0xde8886A0019Ea060B8378Ee37b8A23b8117F29A3",
+    "noOpGovernanceFactory": "0x85f37f74Ef2478A770318bc810177a9835911aD7",
+    "noOpMigrator": "0xba2F330EDb16cD8056f5988d8CE19BbC63475A0e"
+  },
+  "token": {
+    "template": "dopplerERC20V1",
+    "totalSupplyTokens": "1000000000",
+    "tokensToSell": "1000000000",
+    "decimals": 18,
+    "maxWalletTokens": "20000000",
+    "maxWalletDurationSeconds": 86400,
+    "controller": "0x0000000000000000000000000000000000000000"
+  },
+  "pool": {
+    "mechanism": "doppler-lockable-v3",
+    "fee": 10000,
+    "tickSpacing": 200,
+    "numPositions": 20,
+    "curveStatus": "fork-calibration-required",
+    "migration": "noOp",
+    "governance": "noOp"
+  },
+  "fees": {
+    "wad": "1000000000000000000",
+    "creator": "800000000000000000",
+    "hoodieEcosystem": "150000000000000000",
+    "doppler": "50000000000000000"
+  },
+  "dependencies": {
+    "dopplerSdk": "1.0.28"
+  }
+}
+
