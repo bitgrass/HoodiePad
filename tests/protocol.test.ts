@@ -7,19 +7,44 @@ import {
 } from "../app/lib/calibration";
 import {
   deriveHoodieCurve,
+  deriveHoodieCurveForOrdering,
   getBeneficiaryConflict,
   runtimeHashMatches,
 } from "../app/lib/protocol";
 
-test("derives the HOODIE curve by translating the reviewed WETH reference ticks", () => {
+test("derives the HOODIE curve for Doppler's child-token0 ordering", () => {
   const curve = deriveHoodieCurve(198_200);
   assert.deepEqual(curve, {
-    startTick: -23_200,
-    endTick: 26_800,
+    startTick: -26_800,
+    endTick: 23_200,
     referenceTick: 198_200,
     tickSpacing: 200,
     status: "fork-calibration-required",
   });
+});
+
+test("inverts and swaps the tick range when token ordering changes", () => {
+  const childToken0 = deriveHoodieCurveForOrdering(
+    198_200,
+    "child-token0-hoodie-token1",
+  );
+  const hoodieToken0 = deriveHoodieCurveForOrdering(
+    198_200,
+    "hoodie-token0-child-token1",
+  );
+
+  assert.deepEqual(
+    [childToken0.startTick, childToken0.endTick],
+    [-hoodieToken0.endTick, -hoodieToken0.startTick],
+  );
+  assert.deepEqual(
+    [childToken0.startTick, childToken0.endTick],
+    [-26_800, 23_200],
+  );
+  assert.deepEqual(
+    [hoodieToken0.startTick, hoodieToken0.endTick],
+    [-23_200, 26_800],
+  );
 });
 
 test("always aligns candidate ticks to the 1% V3 tick spacing", () => {
@@ -60,8 +85,8 @@ test("requires a matching, complete fork-calibration report", () => {
     chainId: 4663,
     forkBlock: "17170000",
     referenceTick: 201_200,
-    startTick: -26_200,
-    endTick: 23_800,
+    startTick: -23_800,
+    endTick: 26_200,
     configHash: getCalibrationConfigHash(),
     completedAt: "2026-07-23T10:00:00.000Z",
     checks: REQUIRED_CALIBRATION_CHECKS.map((name) => ({ name, passed: true })),

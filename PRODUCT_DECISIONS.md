@@ -19,6 +19,8 @@ This file is authoritative for HoodiePad V1. Changes to a frozen value require a
 | Creator token allocation | 0% |
 | Creator initial buy | Disabled |
 | Pool fee | 1% (`10000`) |
+| Canonical V3 token ordering | Child token is `token0`; HOODIE is `token1` |
+| V3 tick price | HOODIE per child token |
 | Creator fee share | 80% (`0.80e18`) |
 | HOODIE ecosystem share | 15% (`0.15e18`) |
 | Doppler fee share | 5% (`0.05e18`) |

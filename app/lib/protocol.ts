@@ -15,6 +15,7 @@ import {
   StaticAuctionBuilder,
   airlockAbi,
   getAirlockOwner,
+  isToken0Expected,
   type CreateStaticAuctionParams,
 } from "@whetstone-research/doppler-sdk/evm";
 import product from "../../config/hoodiepad-v1.json";
@@ -119,15 +120,43 @@ function alignTick(tick: number, spacing: number) {
   return Object.is(aligned, -0) ? 0 : aligned;
 }
 
-export function deriveHoodieCurve(referenceTick: number) {
+export type HoodieCurveTokenOrdering =
+  | "child-token0-hoodie-token1"
+  | "hoodie-token0-child-token1";
+
+export function deriveHoodieCurveForOrdering(
+  referenceTick: number,
+  ordering: HoodieCurveTokenOrdering,
+) {
   const spacing = product.pool.tickSpacing;
+  const childIsToken0 = ordering === "child-token0-hoodie-token1";
+  const rawStartTick = childIsToken0
+    ? referenceTick - product.pool.referenceEndTickWeth
+    : product.pool.referenceStartTickWeth - referenceTick;
+  const rawEndTick = childIsToken0
+    ? referenceTick - product.pool.referenceStartTickWeth
+    : product.pool.referenceEndTickWeth - referenceTick;
+  const startTick = alignTick(rawStartTick, spacing);
+  const endTick = alignTick(rawEndTick, spacing);
+
+  if (startTick >= endTick) {
+    throw new Error(`Invalid HoodiePad curve after ${ordering} tick normalization`);
+  }
+
   return {
-    startTick: alignTick(product.pool.referenceStartTickWeth - referenceTick, spacing),
-    endTick: alignTick(product.pool.referenceEndTickWeth - referenceTick, spacing),
+    startTick,
+    endTick,
     referenceTick,
     tickSpacing: spacing,
     status: isCalibrationReportApproved() ? "calibrated" : product.pool.curveStatus,
   };
+}
+
+export function deriveHoodieCurve(referenceTick: number) {
+  if (product.pool.tokenOrdering !== "child-token0-hoodie-token1") {
+    throw new Error(`Unsupported HoodiePad V1 token ordering: ${product.pool.tokenOrdering}`);
+  }
+  return deriveHoodieCurveForOrdering(referenceTick, product.pool.tokenOrdering);
 }
 
 export function getBeneficiaryConflict(creator: Address, protocolOwner?: Address) {
@@ -259,6 +288,9 @@ export function buildStaticLaunchParams(
   }
   if (Object.values(chainStatus.dependencies ?? {}).some((item) => !item.matchesExpectedHash)) {
     throw new Error("One or more canonical dependencies do not match the approved runtime hash snapshot");
+  }
+  if (!isToken0Expected(asAddress(product.contracts.hoodie))) {
+    throw new Error("Pinned Doppler SDK no longer mines the child token as token0 for HOODIE");
   }
   const beneficiaryConflict = getBeneficiaryConflict(input.creator, chainStatus.airlockOwner);
   if (beneficiaryConflict) throw new Error(beneficiaryConflict);

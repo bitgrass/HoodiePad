@@ -55,6 +55,8 @@
     "fee": 10000,
     "tickSpacing": 200,
     "numPositions": 20,
+    "tokenOrdering": "child-token0-hoodie-token1",
+    "tickPriceMeaning": "HOODIE per child token",
     "referenceStartTickWeth": 175000,
     "referenceEndTickWeth": 225000,
     "curveStatus": "fork-calibration-required",

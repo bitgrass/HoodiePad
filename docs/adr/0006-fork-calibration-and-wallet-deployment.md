@@ -23,7 +23,7 @@ calibration. The suite:
 
 1. verifies the approved runtime hashes on the fork;
 2. creates the exact V1 launch;
-3. checks the HOODIE/child ordering, ticks, fee, and locked status;
+3. checks the child/HOODIE ordering, ticks, fee, and locked status;
 4. buys exactly 1% of supply;
 5. proves a purchase above the 2% wallet maximum fails;
 6. advances fork time and proves the same restriction expires;

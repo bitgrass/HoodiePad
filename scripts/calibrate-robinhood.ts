@@ -294,8 +294,8 @@ async function main() {
     addCheck(
       checks,
       "token-ordering",
-      token0.toLowerCase() === product.contracts.hoodie.toLowerCase() &&
-        token1.toLowerCase() === token.toLowerCase(),
+      token0.toLowerCase() === token.toLowerCase() &&
+        token1.toLowerCase() === product.contracts.hoodie.toLowerCase(),
       `${token0} / ${token1}`,
     );
     addCheck(
