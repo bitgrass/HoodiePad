@@ -100,6 +100,10 @@ test("freezes the V1 economic, wallet, and Safe invariants", async () => {
   assert.equal(product.token.maxWalletDurationSeconds, 86400);
   assert.equal(product.pool.mechanism, "doppler-lockable-v3");
   assert.equal(product.pool.migration, "noOp");
+  assert.equal(
+    product.pool.noOpMigrationPool,
+    "0xdeaDDeADDEaDdeaDdEAddEADDEAdDeadDEADDEaD",
+  );
   assert.equal(product.pool.governance, "noOp");
   assert.equal(product.pool.curveStatus, "fork-calibration-required");
 });

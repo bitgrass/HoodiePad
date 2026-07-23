@@ -26,6 +26,7 @@ This file is authoritative for HoodiePad V1. Changes to a frozen value require a
 | Doppler fee share | 5% (`0.05e18`) |
 | Rehype | Not used |
 | Migration | NoOp |
+| NoOp migration pool lock | `0xdeaDDeADDEaDdeaDdEAddEADDEAdDeadDEADDEaD` |
 | Governance | NoOp |
 | Maximum wallet | 2% of supply (`20,000,000` tokens) |
 | Maximum-wallet duration | 24 hours |

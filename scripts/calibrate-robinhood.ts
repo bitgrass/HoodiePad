@@ -317,7 +317,7 @@ async function main() {
       tokenPool,
       tokenPoolLocked,
       canonicalPoolExcluded,
-      noOpPoolExcluded,
+      noOpGovernanceExcluded,
     ] =
       await Promise.all([
         tokenEntity.getMaxBalanceLimit(),
@@ -337,10 +337,10 @@ async function main() {
       balanceLimitEnd === expectedBalanceLimitEnd &&
       balanceLimitActive &&
       controller.toLowerCase() === product.token.controller.toLowerCase() &&
-      tokenPool.toLowerCase() === DEAD_ADDRESS.toLowerCase() &&
+      tokenPool.toLowerCase() === product.pool.noOpMigrationPool.toLowerCase() &&
       tokenPoolLocked &&
       canonicalPoolExcluded &&
-      noOpPoolExcluded;
+      noOpGovernanceExcluded;
     addCheck(
       checks,
       "token-policy",
@@ -350,10 +350,10 @@ async function main() {
         `balanceLimitEnd ${balanceLimitEnd} expected ${expectedBalanceLimitEnd}`,
         `active ${balanceLimitActive}`,
         `controller ${controller} expected ${product.token.controller}`,
-        `locked pool sentinel ${tokenPool} expected ${DEAD_ADDRESS}`,
+        `NoOp migration pool ${tokenPool} expected ${product.pool.noOpMigrationPool}`,
         `pool lock active ${tokenPoolLocked}`,
         `canonical V3 pool excluded ${canonicalPoolExcluded}`,
-        `NoOp pool sentinel excluded ${noOpPoolExcluded}`,
+        `NoOp governance excluded ${noOpGovernanceExcluded}`,
       ].join("; "),
     );
 

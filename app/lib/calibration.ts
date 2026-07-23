@@ -55,6 +55,7 @@ export function getCalibrationConfigHash() {
       numPositions: product.pool.numPositions,
       tokenOrdering: product.pool.tokenOrdering,
       tickPriceMeaning: product.pool.tickPriceMeaning,
+      noOpMigrationPool: product.pool.noOpMigrationPool,
       referenceStartTickWeth: product.pool.referenceStartTickWeth,
       referenceEndTickWeth: product.pool.referenceEndTickWeth,
       migration: product.pool.migration,
