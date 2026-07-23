@@ -149,13 +149,13 @@ test("prepares a connected-wallet launch draft but fails closed on protocol bloc
   assert.equal(payload.chainStatus.available, false);
   assert.match(payload.metadata.key, /^token-metadata\/[a-f0-9]{64}\.json$/);
   assert.match(payload.metadata.url, /^http:\/\/localhost\/api\/metadata\?key=/);
-  assert.ok(payload.blockers.includes("Calibrate and snapshot the Robinhood V3 curve on a mainnet fork."));
+  assert.ok(!payload.blockers.includes("Calibrate and snapshot the Robinhood V3 curve on a mainnet fork."));
   assert.ok(payload.blockers.includes("Record external launch-adapter review approval."));
   assert.ok(payload.blockers.includes("Live Robinhood RPC verification is unavailable."));
   assert.ok(payload.blockers.includes("Mainnet broadcast is disabled by policy."));
   assert.ok(!payload.blockers.some((blocker) => blocker.includes("ecosystem Safe")));
-  assert.equal(payload.calibration.status, "pending");
-  assert.equal(payload.calibration.approved, false);
+  assert.equal(payload.calibration.status, "passed");
+  assert.equal(payload.calibration.approved, true);
   assert.equal(payload.deployment, null);
 
   const metadataResponse = await app.fetch(new Request(payload.metadata.url), env, ctx);

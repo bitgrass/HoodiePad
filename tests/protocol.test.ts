@@ -19,7 +19,7 @@ test("derives the HOODIE curve for Doppler's child-token0 ordering", () => {
     endTick: 23_200,
     referenceTick: 198_200,
     tickSpacing: 200,
-    status: "fork-calibration-required",
+    status: "calibrated",
   });
 });
 

@@ -62,3 +62,12 @@ Real deployment becomes available through an explicit creator wallet
 confirmation while automated tooling remains read-only on mainnet. Any protocol
 or economic change automatically closes the release gate until calibration and
 review are repeated.
+
+## Calibration result
+
+The complete suite passed on a disposable Robinhood fork at block `17251944`
+using reference tick `200879` and the aligned candidate curve
+`-24200 -> 25800`. The committed report records every required check and config
+hash `0x4ac3026c7ff6ced11c969437e1b084685235119a92582474bb514ceae620133a`.
+These ticks are the block-pinned calibration snapshot; production preparation
+continues to derive aligned ticks from the live HOODIE/WETH reference.
