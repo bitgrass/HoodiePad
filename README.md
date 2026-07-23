@@ -76,8 +76,9 @@ npm run verify:release
 ```
 
 The API returns deployment calldata only when the calibration report passes,
-the live dependency hashes match, the exact launch simulates, external review
-is approved, and `HOODIEPAD_BROADCAST_ENABLED=true`.
+the live dependency hashes match, the exact launch simulates, the review gate
+is satisfied by external approval or an explicit owner risk waiver, and
+`HOODIEPAD_BROADCAST_ENABLED=true`.
 
 Mainnet submission is never performed by server tooling. The connected creator
 must confirm the exact `Airlock.create` transaction in MetaMask. Prepared

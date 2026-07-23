@@ -37,7 +37,7 @@ This file is authoritative for HoodiePad V1. Changes to a frozen value require a
 | Token description | Optional, maximum 280 characters |
 | Creator fee recipient | Connected MetaMask account; not independently editable |
 | Production signer | Connected MetaMask account; no server-side deployment key |
-| Deployment authorization | Exact simulation, passing fork report, external review, policy switch, then explicit MetaMask confirmation |
+| Deployment authorization | Exact simulation, passing fork report, external review or explicit owner risk waiver, policy switch, then explicit MetaMask confirmation |
 | Metadata | HoodiePad generates the immutable production metadata URI |
 | Base | Out of scope |
 
@@ -48,7 +48,9 @@ Mainnet broadcasting stays disabled until all of these are true:
 1. The locked V3 tick range has passed buy, sell, fee-claim, max-wallet, and token-ordering tests on a current Robinhood fork.
 2. Every canonical Doppler dependency has non-empty bytecode and the expected runtime hash.
 3. The live Airlock owner resolves to the 5% beneficiary used by the launch.
-4. An external reviewer signs off on the launch adapter and operational runbook.
+4. An external reviewer signs off on the launch adapter and operational runbook,
+   or the owner records an explicit risk waiver while keeping that missing review
+   visible in release output.
 
 ## Runtime hash snapshot
 

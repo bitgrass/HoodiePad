@@ -27,15 +27,28 @@ outside the public repository if it contains private contact information.
 Do not set the review flag based only on self-review or a passing automated
 test.
 
-## 2. Enable the two human-controlled gates
+## 2. Enable the human-controlled gates
 
-Only after review approval, set these values in the environment that serves
-HoodiePad:
+The recommended path is external review approval:
 
 ```dotenv
 HOODIEPAD_EXTERNAL_REVIEW_APPROVED=true
+HOODIEPAD_OWNER_RISK_WAIVER=false
 HOODIEPAD_BROADCAST_ENABLED=true
 ```
+
+If the owner explicitly accepts proceeding before external review, keep the
+review flag false and record the waiver instead:
+
+```dotenv
+HOODIEPAD_EXTERNAL_REVIEW_APPROVED=false
+HOODIEPAD_OWNER_RISK_WAIVER=true
+HOODIEPAD_BROADCAST_ENABLED=true
+```
+
+An owner waiver does not represent or replace an external security review. It
+only records who accepted the remaining risk and keeps that fact visible in
+release output.
 
 Restart the application after changing environment variables. Then run:
 
@@ -48,7 +61,7 @@ Proceed only when it reports:
 ```text
 Calibration              PASSED
 Calibration config       MATCH
-External review          APPROVED
+Review gate              APPROVED or OWNER WAIVER
 Deployment policy        ENABLED
 Robinhood RPC            CONNECTED
 Dependency snapshot      VERIFIED

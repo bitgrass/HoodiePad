@@ -11,6 +11,7 @@ import {
   getBeneficiaryConflict,
   runtimeHashMatches,
 } from "../app/lib/protocol";
+import { getReleasePolicy } from "../app/lib/release-policy";
 
 test("derives the HOODIE curve for Doppler's child-token0 ordering", () => {
   const curve = deriveHoodieCurve(198_200);
@@ -104,4 +105,18 @@ test("requires a matching, complete fork-calibration report", () => {
     }),
     false,
   );
+});
+
+test("records an owner waiver without mislabeling it as external review", () => {
+  const policy = getReleasePolicy({
+    HOODIEPAD_EXTERNAL_REVIEW_APPROVED: "false",
+    HOODIEPAD_OWNER_RISK_WAIVER: "true",
+    HOODIEPAD_BROADCAST_ENABLED: "true",
+  });
+
+  assert.equal(policy.externalReviewApproved, false);
+  assert.equal(policy.ownerRiskWaiver, true);
+  assert.equal(policy.reviewGateApproved, true);
+  assert.equal(policy.reviewGateLabel, "OWNER WAIVER");
+  assert.equal(policy.broadcastEnabled, true);
 });

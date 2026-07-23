@@ -5,6 +5,7 @@ import {
   isCalibrationReportApproved,
 } from "../app/lib/calibration";
 import { readChainStatus, simulateLaunch } from "../app/lib/protocol";
+import { getReleasePolicy } from "../app/lib/release-policy";
 
 const DEFAULT_CREATOR = "0x1111111111111111111111111111111111111111";
 const creator = (
@@ -17,15 +18,14 @@ function line(label: string, value: unknown) {
 
 const report = getCalibrationReport();
 const calibrationApproved = isCalibrationReportApproved(report);
-const reviewApproved = process.env.HOODIEPAD_EXTERNAL_REVIEW_APPROVED === "true";
-const deploymentEnabled = process.env.HOODIEPAD_BROADCAST_ENABLED === "true";
+const releasePolicy = getReleasePolicy();
 
 line("Mode", "READ-ONLY RELEASE CHECK");
 line("Calibration", calibrationApproved ? "PASSED" : report.status.toUpperCase());
 line("Calibration block", report.forkBlock ?? "not recorded");
 line("Calibration config", report.configHash === getCalibrationConfigHash() ? "MATCH" : "MISMATCH");
-line("External review", reviewApproved ? "APPROVED" : "NOT APPROVED");
-line("Deployment policy", deploymentEnabled ? "ENABLED" : "DISABLED");
+line("Review gate", releasePolicy.reviewGateLabel);
+line("Deployment policy", releasePolicy.broadcastEnabled ? "ENABLED" : "DISABLED");
 
 const chainStatus = await readChainStatus();
 line("Robinhood RPC", chainStatus.available ? "CONNECTED" : "UNAVAILABLE");
@@ -49,8 +49,10 @@ if (simulation.status !== "simulated") line("Simulation reason", simulation.erro
 
 const blockers = [
   ...(!calibrationApproved ? ["Robinhood fork calibration has not passed."] : []),
-  ...(!reviewApproved ? ["External review approval is missing."] : []),
-  ...(!deploymentEnabled ? ["Mainnet deployment policy is disabled."] : []),
+  ...(!releasePolicy.reviewGateApproved
+    ? ["External review approval or an owner risk waiver is missing."]
+    : []),
+  ...(!releasePolicy.broadcastEnabled ? ["Mainnet deployment policy is disabled."] : []),
   ...(!chainStatus.available ? ["Robinhood RPC is unavailable."] : []),
   ...(!dependenciesApproved ? ["A runtime dependency hash is unverified."] : []),
   ...(simulation.status !== "simulated" ? ["The exact launch transaction did not simulate."] : []),

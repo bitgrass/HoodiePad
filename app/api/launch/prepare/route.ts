@@ -4,6 +4,7 @@ import {
   isCalibrationReportApproved,
 } from "../../../lib/calibration";
 import { readChainStatus, simulateLaunch } from "../../../lib/protocol";
+import { getReleasePolicy } from "../../../lib/release-policy";
 import { getRuntimeEnv } from "../../../runtime-env";
 import type { Address } from "viem";
 
@@ -123,9 +124,7 @@ export async function POST(request: Request) {
   const safeConfigured = addressPattern.test(ecosystemSafe) && !/^0x0{40}$/i.test(ecosystemSafe);
   const calibrationReport = getCalibrationReport();
   const curveCalibrated = isCalibrationReportApproved(calibrationReport);
-  const externalReviewApproved =
-    process.env.HOODIEPAD_EXTERNAL_REVIEW_APPROVED === "true";
-  const broadcastEnabled = process.env.HOODIEPAD_BROADCAST_ENABLED === "true";
+  const releasePolicy = getReleasePolicy();
 
   const normalized = {
     name: String(body.name).trim(),
@@ -171,12 +170,14 @@ export async function POST(request: Request) {
   const blockers = [
     ...(!safeConfigured ? ["Configure the HOODIE ecosystem Safe."] : []),
     ...(!curveCalibrated ? ["Calibrate and snapshot the Robinhood V3 curve on a mainnet fork."] : []),
-    ...(!externalReviewApproved ? ["Record external launch-adapter review approval."] : []),
+    ...(!releasePolicy.reviewGateApproved
+      ? ["Record external review approval or an explicit owner risk waiver."]
+      : []),
     ...(!chainStatus.available ? ["Live Robinhood RPC verification is unavailable."] : []),
     ...(chainStatus.available && simulation.status !== "simulated"
       ? ["Canonical Doppler launch simulation did not complete."]
       : []),
-    ...(!broadcastEnabled ? ["Mainnet broadcast is disabled by policy."] : []),
+    ...(!releasePolicy.broadcastEnabled ? ["Mainnet broadcast is disabled by policy."] : []),
   ];
   const productionReady = blockers.length === 0;
   const publicSimulation = { ...simulation, calldata: undefined };
