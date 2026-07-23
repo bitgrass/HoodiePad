@@ -69,18 +69,15 @@ try {
   });
 
   const artworkBytes = new Uint8Array([137, 80, 78, 71, 13, 10]);
-  const formData = new FormData();
-  formData.append(
-    "artwork",
-    new File([artworkBytes], "railway-smoke.png", { type: "image/png" }),
-  );
   const uploadResponse = await fetch(`${origin}/api/artwork`, {
     method: "POST",
     headers: {
+      "content-type": "image/png",
+      "x-hoodiepad-artwork-name": "railway-smoke.png",
       "x-forwarded-host": "hoodiepad-production.up.railway.app",
       "x-forwarded-proto": "https",
     },
-    body: formData,
+    body: artworkBytes,
   });
   assert.equal(uploadResponse.status, 200);
   const uploaded = await uploadResponse.json() as { key: string; url: string };

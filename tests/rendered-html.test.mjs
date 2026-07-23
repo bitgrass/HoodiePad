@@ -39,9 +39,14 @@ const env = {
 const ctx = { waitUntil() {}, passThroughOnException() {} };
 
 async function uploadArtwork(app) {
-  const formData = new FormData();
-  formData.append("artwork", new File([new Uint8Array([137, 80, 78, 71, 13, 10])], "hoodie.png", { type: "image/png" }));
-  const response = await app.fetch(new Request("http://localhost/api/artwork", { method: "POST", body: formData }), env, ctx);
+  const response = await app.fetch(new Request("http://localhost/api/artwork", {
+    method: "POST",
+    headers: {
+      "content-type": "image/png",
+      "x-hoodiepad-artwork-name": "hoodie.png",
+    },
+    body: new Uint8Array([137, 80, 78, 71, 13, 10]),
+  }), env, ctx);
   assert.equal(response.status, 200);
   return response.json();
 }
@@ -118,6 +123,17 @@ test("accepts a token artwork file and serves the immutable uploaded object", as
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("content-type"), "image/png");
   assert.match(response.headers.get("cache-control") ?? "", /immutable/);
+});
+
+test("rejects multipart artwork requests before the production proxy must parse them", async () => {
+  const app = await worker();
+  const response = await app.fetch(new Request("http://localhost/api/artwork", {
+    method: "POST",
+    headers: { "content-type": "multipart/form-data; boundary=unused" },
+    body: "--unused--",
+  }), env, ctx);
+  assert.equal(response.status, 422);
+  assert.match((await response.json()).error, /JPG, PNG, or WebP/);
 });
 
 test("reports a healthy runtime when persistent object storage is available", async () => {

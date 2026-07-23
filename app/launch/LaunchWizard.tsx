@@ -145,10 +145,18 @@ export function LaunchWizard() {
 
   async function uploadArtwork() {
     if (!artwork) throw new Error("Artwork is required");
-    const formData = new FormData();
-    formData.append("artwork", artwork);
-    const response = await fetch("/api/artwork", { method: "POST", body: formData });
-    if (!response.ok) throw new Error("Artwork upload failed");
+    const response = await fetch("/api/artwork", {
+      method: "POST",
+      headers: {
+        "content-type": artwork.type,
+        "x-hoodiepad-artwork-name": encodeURIComponent(artwork.name),
+      },
+      body: artwork,
+    });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => null) as { error?: string } | null;
+      throw new Error(payload?.error ?? "Artwork upload failed.");
+    }
     return (await response.json()) as UploadedArtwork;
   }
 
@@ -178,8 +186,12 @@ export function LaunchWizard() {
       setPrepared((await response.json()) as PreparedLaunch);
       setPreparedWallet(address);
       setStatus("idle");
-    } catch {
-      setErrorMessage("Could not upload the artwork or prepare this launch. Try again.");
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "Could not upload the artwork or prepare this launch. Try again.",
+      );
       setStatus("error");
     }
   }

@@ -16,31 +16,45 @@ async function sha256(value: ArrayBuffer) {
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-export async function POST(request: Request) {
-  const formData = await request.formData();
-  const file = formData.get("artwork");
-
-  if (!(file instanceof File)) {
-    return Response.json({ error: "Choose an artwork file." }, { status: 400 });
+function originalArtworkName(request: Request) {
+  const encodedName = request.headers.get("x-hoodiepad-artwork-name") ?? "artwork";
+  try {
+    return decodeURIComponent(encodedName).slice(0, 160);
+  } catch {
+    return "artwork";
   }
+}
 
-  const extension = supportedTypes.get(file.type);
-  if (!extension || file.size === 0 || file.size > MAX_ARTWORK_BYTES) {
+export async function POST(request: Request) {
+  const contentType = (request.headers.get("content-type") ?? "")
+    .split(";", 1)[0]
+    .trim()
+    .toLowerCase();
+  const extension = supportedTypes.get(contentType);
+  const declaredSize = Number(request.headers.get("content-length") ?? "0");
+  if (!extension || (Number.isFinite(declaredSize) && declaredSize > MAX_ARTWORK_BYTES)) {
     return Response.json(
       { error: "Artwork must be a JPG, PNG, or WebP file no larger than 5 MB." },
       { status: 422 },
     );
   }
 
-  const bytes = await file.arrayBuffer();
+  const bytes = await request.arrayBuffer();
+  if (bytes.byteLength === 0 || bytes.byteLength > MAX_ARTWORK_BYTES) {
+    return Response.json(
+      { error: "Artwork must be a JPG, PNG, or WebP file no larger than 5 MB." },
+      { status: 422 },
+    );
+  }
+
   const digest = await sha256(bytes);
   const key = `token-artwork/${digest}.${extension}`;
 
   try {
     await putStoredObject(key, bytes, {
-      contentType: file.type,
+      contentType,
       cacheControl: "public, max-age=31536000, immutable",
-      customMetadata: { originalName: file.name.slice(0, 160), sha256: digest },
+      customMetadata: { originalName: originalArtworkName(request), sha256: digest },
     });
   } catch (error) {
     if (error instanceof ObjectStorageUnavailableError) {
@@ -56,8 +70,8 @@ export async function POST(request: Request) {
     key,
     url: artworkUrl.toString(),
     sha256: digest,
-    contentType: file.type,
-    size: file.size,
+    contentType,
+    size: bytes.byteLength,
   });
 }
 
