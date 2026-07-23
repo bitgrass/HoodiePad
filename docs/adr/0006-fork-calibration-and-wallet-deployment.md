@@ -34,6 +34,11 @@ calibration. The suite:
 8. claims fees and verifies the 80/15/5 distribution in both assets; and
 9. proves liquidity exit remains unavailable.
 
+Robinhood's deployed Universal Router uses the six-field V3 command payload,
+including the optional `uint256[] minHopPriceX36` field. Calibration encodes an
+empty per-hop array for its single-pool buys and sells, leaving the explicit
+aggregate `amountInMaximum` and `amountOutMinimum` limits in force.
+
 The suite writes a block-pinned report whose configuration hash covers all
 economic parameters, module addresses, dependency hashes, and the pinned
 Doppler SDK version. Changing any covered value invalidates the report.

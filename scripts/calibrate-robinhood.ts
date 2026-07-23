@@ -56,10 +56,10 @@ const universalRouterAbi = parseAbi([
   "function execute(bytes commands, bytes[] inputs, uint256 deadline) payable",
 ]);
 const exactInputParameters = parseAbiParameters(
-  "address recipient, uint256 amountIn, uint256 amountOutMin, bytes path, bool payerIsUser",
+  "address recipient, uint256 amountIn, uint256 amountOutMin, bytes path, bool payerIsUser, uint256[] minHopPriceX36",
 );
 const exactOutputParameters = parseAbiParameters(
-  "address recipient, uint256 amountOut, uint256 amountInMax, bytes path, bool payerIsUser",
+  "address recipient, uint256 amountOut, uint256 amountInMax, bytes path, bool payerIsUser, uint256[] minHopPriceX36",
 );
 
 function sourceRpcUrl() {
@@ -75,9 +75,14 @@ function sourceRpcUrl() {
 function redactError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error);
   return message
-    .split("\n")[0]
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .slice(0, 8)
+    .join(" ")
     .replace(/https?:\/\/[^\s]+/g, "[redacted RPC]")
-    .replace(/alch_[A-Za-z0-9_-]+/g, "[redacted key]");
+    .replace(/alch_[A-Za-z0-9_-]+/g, "[redacted key]")
+    .slice(0, 2_000);
 }
 
 async function resolveAnvilExecutable() {
@@ -436,6 +441,7 @@ async function main() {
         amountInMaximum,
         exactOutputPath(product.contracts.hoodie as Address, token),
         true,
+        [],
       ]);
       const hash = await buyerWallet.writeContract({
         address: addresses.universalRouter,
@@ -506,6 +512,7 @@ async function main() {
       exactInputQuote.result[0] * 99n / 100n,
       v3Path(token, product.contracts.hoodie as Address),
       true,
+      [],
     ]);
     const sellHash = await buyerWallet.writeContract({
       address: addresses.universalRouter,
