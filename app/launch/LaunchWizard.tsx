@@ -18,6 +18,43 @@ type PreparedLaunch = {
   preparedAt: string;
   productionReady: boolean;
   blockers: string[];
+  calibration: {
+    status: "pending" | "passed" | "failed";
+    forkBlock: string | null;
+    approved: boolean;
+  };
+  chainStatus: {
+    available: boolean;
+    blockNumber?: string;
+    airlockOwner?: string;
+    referencePool?: {
+      tick: number;
+      liquidity: string;
+      hoodiePerWeth: string;
+    };
+  };
+  simulation: {
+    status: "simulated" | "unavailable";
+    asset?: string;
+    pool?: string;
+    gasEstimate?: string;
+    error?: string;
+    curve?: {
+      startTick: number;
+      endTick: number;
+      referenceTick: number;
+    };
+  };
+  deployment: {
+    chainId: number;
+    from: string;
+    to: string;
+    data: string;
+    gasLimit: string;
+    predictedToken: string;
+    predictedPool: string;
+    validUntil: string;
+  } | null;
 };
 
 type UploadedArtwork = {
@@ -38,21 +75,30 @@ const addressPattern = /^0x[a-fA-F0-9]{40}$/;
 const supportedArtworkTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
 const maxArtworkBytes = 5 * 1024 * 1024;
 const ecosystemSafe = "0xAB10Efe787DB2ef3700b94578aeC68b98e0446A7";
+const launchSteps = [
+  [1, "Token details", "Name the thing"],
+  [2, "Connected wallet", "Route the 80%"],
+  [3, "Review launch", "Know what you sign"],
+] as const;
 
 function shorten(address: string) {
   return `${address.slice(0, 8)}…${address.slice(-6)}`;
 }
 
 export function LaunchWizard() {
-  const { address } = useWallet();
+  const { address, sendTransaction } = useWallet();
   const [step, setStep] = useState(1);
   const [draft, setDraft] = useState(initialDraft);
   const [artwork, setArtwork] = useState<File | null>(null);
   const [artworkError, setArtworkError] = useState("");
   const [agreed, setAgreed] = useState(false);
-  const [status, setStatus] = useState<"idle" | "uploading" | "preparing" | "error">("idle");
+  const [status, setStatus] = useState<
+    "idle" | "uploading" | "preparing" | "deploying" | "deployed" | "error"
+  >("idle");
   const [prepared, setPrepared] = useState<PreparedLaunch | null>(null);
   const [preparedWallet, setPreparedWallet] = useState("");
+  const [transactionHash, setTransactionHash] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
 
   const artworkPreview = useMemo(() => (artwork ? URL.createObjectURL(artwork) : ""), [artwork]);
   useEffect(() => () => {
@@ -71,6 +117,8 @@ export function LaunchWizard() {
   function update<K extends keyof Draft>(key: K, value: Draft[K]) {
     setPrepared(null);
     setPreparedWallet("");
+    setTransactionHash("");
+    setErrorMessage("");
     setDraft((current) => ({
       ...current,
       [key]: key === "symbol" ? String(value).toUpperCase() : value,
@@ -80,6 +128,8 @@ export function LaunchWizard() {
   function chooseArtwork(file: File | undefined) {
     setPrepared(null);
     setPreparedWallet("");
+    setTransactionHash("");
+    setErrorMessage("");
     setArtworkError("");
     if (!file) {
       setArtwork(null);
@@ -107,6 +157,8 @@ export function LaunchWizard() {
     if (!validMetadata || !validWallet || !agreed) return;
     setPrepared(null);
     setPreparedWallet("");
+    setTransactionHash("");
+    setErrorMessage("");
     setStatus("uploading");
     try {
       const uploaded = await uploadArtwork();
@@ -127,6 +179,28 @@ export function LaunchWizard() {
       setPreparedWallet(address);
       setStatus("idle");
     } catch {
+      setErrorMessage("Could not upload the artwork or prepare this launch. Try again.");
+      setStatus("error");
+    }
+  }
+
+  async function deployLaunch() {
+    if (!prepared?.productionReady || !prepared.deployment || preparedWallet !== address) return;
+    if (Date.now() >= new Date(prepared.deployment.validUntil).getTime()) {
+      setErrorMessage("This deployment preview expired. Prepare a fresh simulation before signing.");
+      setPrepared(null);
+      setPreparedWallet("");
+      setStatus("error");
+      return;
+    }
+    setErrorMessage("");
+    setStatus("deploying");
+    try {
+      const hash = await sendTransaction(prepared.deployment);
+      setTransactionHash(hash);
+      setStatus("deployed");
+    } catch {
+      setErrorMessage("MetaMask did not submit the deployment. Review the transaction and try again.");
       setStatus("error");
     }
   }
@@ -134,11 +208,7 @@ export function LaunchWizard() {
   return (
     <div className="launch-studio">
       <aside className="launch-steps" aria-label="Launch progress">
-        {[
-          [1, "Token details", "Name the thing"],
-          [2, "Connected wallet", "Route the 80%"],
-          [3, "Review launch", "Know what you sign"],
-        ].map(([number, label, hint]) => (
+        {launchSteps.map(([number, label, hint]) => (
           <button
             className={step === number ? "is-active" : step > number ? "is-done" : ""}
             key={number}
@@ -262,20 +332,76 @@ export function LaunchWizard() {
               <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} />
               <span>I understand the token, pool, fee beneficiaries, and metadata are irreversible after launch.</span>
             </label>
-            <div className="simulation-notice"><span>SIMULATION MODE</span><p>Mainnet broadcast remains disabled until the calibrated curve and contract checks pass the release gate.</p></div>
+            <div className={`simulation-notice${prepared?.productionReady ? " is-ready" : ""}`}>
+              <span>{prepared?.productionReady ? "DEPLOYMENT READY" : "RELEASE GATE"}</span>
+              <p>
+                {prepared?.productionReady
+                  ? "The fork calibration, dependency snapshot, and live simulation passed. MetaMask will show the final mainnet transaction before anything is submitted."
+                  : "HoodiePad prepares and simulates the exact transaction first. Mainnet deployment appears only after every release check passes."}
+              </p>
+            </div>
             {prepared && preparedWallet === address && (
-              <div className="prepared-card" role="status">
-                <div><span>✓</span><strong>Artwork uploaded and launch draft prepared</strong></div>
+              <div className={`prepared-card${prepared.productionReady ? " is-ready" : ""}`} role="status">
+                <div>
+                  <span>{prepared.simulation.status === "simulated" ? "✓" : "i"}</span>
+                  <strong>
+                    {prepared.productionReady
+                      ? "Exact deployment transaction is ready"
+                      : prepared.simulation.status === "simulated"
+                      ? "Live Robinhood simulation completed"
+                      : "Draft prepared; live simulation unavailable"}
+                  </strong>
+                </div>
                 <code>{prepared.checksum}</code>
+                {prepared.chainStatus.available && (
+                  <dl className="prepared-facts">
+                    <div><dt>Block</dt><dd>{prepared.chainStatus.blockNumber}</dd></div>
+                    <div><dt>HOODIE / WETH</dt><dd>{prepared.chainStatus.referencePool?.hoodiePerWeth} HOODIE</dd></div>
+                    <div><dt>Predicted token</dt><dd>{prepared.simulation.asset ? shorten(prepared.simulation.asset) : "—"}</dd></div>
+                    <div><dt>Predicted pool</dt><dd>{prepared.simulation.pool ? shorten(prepared.simulation.pool) : "—"}</dd></div>
+                    <div><dt>Gas estimate</dt><dd>{prepared.simulation.gasEstimate ?? "—"}</dd></div>
+                    <div><dt>Fork calibration</dt><dd>{prepared.calibration.approved ? `Block ${prepared.calibration.forkBlock}` : prepared.calibration.status}</dd></div>
+                  </dl>
+                )}
                 <ul>{prepared.blockers.map((blocker) => <li key={blocker}>{blocker}</li>)}</ul>
               </div>
             )}
-            {status === "error" && <p className="form-error">Could not upload the artwork or prepare this draft. Try again.</p>}
+            {transactionHash && prepared?.deployment && (
+              <div className="deployment-success" role="status">
+                <strong>Deployment submitted to Robinhood Chain.</strong>
+                <a
+                  href={`https://robinhoodchain.blockscout.com/tx/${transactionHash}`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  View transaction
+                </a>
+                <a href={`/token/${prepared.deployment.predictedToken}`}>
+                  Open predicted token page
+                </a>
+              </div>
+            )}
+            {status === "error" && <p className="form-error">{errorMessage}</p>}
             <div className="form-actions">
               <button className="back-button" type="button" onClick={() => setStep(2)}>← Back</button>
-              <button className="button button-primary" type="submit" disabled={!agreed || !validWallet || status === "uploading" || status === "preparing"}>
-                {status === "uploading" ? "Uploading artwork…" : status === "preparing" ? "Preparing…" : "Prepare simulation"} <span>↗</span>
-              </button>
+              {prepared?.productionReady && prepared.deployment ? (
+                <button
+                  className="button button-primary"
+                  type="button"
+                  disabled={status === "deploying" || status === "deployed"}
+                  onClick={deployLaunch}
+                >
+                  {status === "deploying"
+                    ? "Confirm in MetaMask"
+                    : status === "deployed"
+                      ? "Deployment submitted"
+                      : "Deploy with MetaMask"} <span>↗</span>
+                </button>
+              ) : (
+                <button className="button button-primary" type="submit" disabled={!agreed || !validWallet || status === "uploading" || status === "preparing"}>
+                {status === "uploading" ? "Uploading artwork…" : status === "preparing" ? "Simulating on Robinhood…" : "Prepare simulation"} <span>↗</span>
+                </button>
+              )}
             </div>
           </div>
         )}

@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "status": "pending",
+  "chainId": 4663,
+  "forkBlock": null,
+  "referenceTick": null,
+  "startTick": null,
+  "endTick": null,
+  "configHash": null,
+  "completedAt": null,
+  "checks": []
+}

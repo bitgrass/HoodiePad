@@ -71,6 +71,29 @@ test("freezes the V1 economic, wallet, and Safe invariants", async () => {
   assert.equal(product.network.chainId, 4663);
   assert.equal(product.contracts.hoodie, "0xC72c01AAB5f5678dc1d6f5C6d2B417d91D402Ba3");
   assert.equal(product.contracts.hoodieEcosystemSafe, "0xAB10Efe787DB2ef3700b94578aeC68b98e0446A7");
+  assert.equal(product.contracts.weth, "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73");
+  assert.equal(product.hoodieReferencePool.poolId, "0x590eb1069a71fe72e3470f094c324513da3691987868a2b355fd8f29713d889b");
+  assert.equal(product.hoodieReferencePool.currency0, product.contracts.weth);
+  assert.equal(product.hoodieReferencePool.currency1, product.contracts.hoodie);
+  assert.equal(product.runtimeHashSnapshot.chainId, 4663);
+  assert.equal(product.runtimeHashSnapshot.observedAtBlock, "17157669");
+  assert.deepEqual(
+    Object.keys(product.runtimeHashSnapshot.hashes).sort(),
+    [
+      "airlock",
+      "dopplerERC20V1Factory",
+      "hoodie",
+      "lockableV3Initializer",
+      "noOpGovernanceFactory",
+      "noOpMigrator",
+      "uniswapUniversalRouter",
+      "uniswapV4PoolManager",
+      "uniswapV4StateView",
+    ].sort(),
+  );
+  for (const hash of Object.values(product.runtimeHashSnapshot.hashes)) {
+    assert.match(hash, /^0x[a-f0-9]{64}$/);
+  }
   assert.equal(product.token.totalSupplyTokens, "1000000000");
   assert.equal(product.token.tokensToSell, product.token.totalSupplyTokens);
   assert.equal(product.token.maxWalletTokens, "20000000");
@@ -118,7 +141,48 @@ test("prepares a connected-wallet launch draft but fails closed on protocol bloc
   assert.equal(payload.config.numeraire, "0xC72c01AAB5f5678dc1d6f5C6d2B417d91D402Ba3");
   assert.equal(payload.config.creatorFeeRecipient, "0x1111111111111111111111111111111111111111");
   assert.equal(payload.config.ecosystemFeeRecipient, "0xAB10Efe787DB2ef3700b94578aeC68b98e0446A7");
+  assert.equal(payload.simulation.status, "unavailable");
+  assert.equal(payload.chainStatus.available, false);
+  assert.match(payload.metadata.key, /^token-metadata\/[a-f0-9]{64}\.json$/);
+  assert.match(payload.metadata.url, /^http:\/\/localhost\/api\/metadata\?key=/);
   assert.ok(payload.blockers.includes("Calibrate and snapshot the Robinhood V3 curve on a mainnet fork."));
+  assert.ok(payload.blockers.includes("Record external launch-adapter review approval."));
+  assert.ok(payload.blockers.includes("Live Robinhood RPC verification is unavailable."));
   assert.ok(payload.blockers.includes("Mainnet broadcast is disabled by policy."));
   assert.ok(!payload.blockers.some((blocker) => blocker.includes("ecosystem Safe")));
+  assert.equal(payload.calibration.status, "pending");
+  assert.equal(payload.calibration.approved, false);
+  assert.equal(payload.deployment, null);
+
+  const metadataResponse = await app.fetch(new Request(payload.metadata.url), env, ctx);
+  assert.equal(metadataResponse.status, 200);
+  assert.equal(metadataResponse.headers.get("content-type"), "application/json");
+  assert.match(metadataResponse.headers.get("cache-control") ?? "", /immutable/);
+  const metadata = await metadataResponse.json();
+  assert.equal(metadata.name, "Hoodie Hug");
+  assert.equal(metadata.symbol, "HUG");
+  assert.equal(metadata.properties.chain_id, 4663);
+  assert.equal(metadata.properties.canonical_numeraire, "0xC72c01AAB5f5678dc1d6f5C6d2B417d91D402Ba3");
+});
+
+test("rejects a creator wallet that duplicates the ecosystem beneficiary", async () => {
+  const app = await worker();
+  const uploaded = await uploadArtwork(app);
+  const response = await app.fetch(new Request("http://localhost/api/launch/prepare", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      name: "Conflicting Hoodie",
+      symbol: "NOPE",
+      description: "",
+      artworkKey: uploaded.key,
+      artworkUrl: uploaded.url,
+      artworkSha256: uploaded.sha256,
+      payoutWallet: "0xAB10Efe787DB2ef3700b94578aeC68b98e0446A7",
+    }),
+  }), env, ctx);
+
+  assert.equal(response.status, 422);
+  const payload = await response.json();
+  assert.match(payload.error, /different from the HOODIE ecosystem Safe/);
 });

@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 
 type EthereumProvider = {
   isMetaMask?: boolean;
@@ -28,6 +28,12 @@ type WalletContextValue = {
   address: string;
   status: "idle" | "connecting" | "error";
   connect: () => Promise<void>;
+  sendTransaction: (transaction: {
+    from: string;
+    to: string;
+    data: string;
+    gasLimit: string;
+  }) => Promise<string>;
 };
 
 const WalletContext = createContext<WalletContextValue | null>(null);
@@ -39,6 +45,21 @@ function metaMaskProvider() {
     return injected.providers.find((provider) => provider.isMetaMask);
   }
   return injected.isMetaMask ? injected : undefined;
+}
+
+async function ensureRobinhoodChain(provider: EthereumProvider) {
+  try {
+    await provider.request({
+      method: "wallet_switchEthereumChain",
+      params: [{ chainId: ROBINHOOD_CHAIN.chainId }],
+    });
+  } catch (error) {
+    if ((error as { code?: number }).code !== 4902) throw error;
+    await provider.request({
+      method: "wallet_addEthereumChain",
+      params: [ROBINHOOD_CHAIN],
+    });
+  }
 }
 
 export function WalletProvider({ children }: { children: ReactNode }) {
@@ -81,18 +102,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       const account = Array.isArray(accounts) ? accounts[0] : undefined;
       if (typeof account !== "string") throw new Error("No MetaMask account returned");
 
-      try {
-        await provider.request({
-          method: "wallet_switchEthereumChain",
-          params: [{ chainId: ROBINHOOD_CHAIN.chainId }],
-        });
-      } catch (error) {
-        if ((error as { code?: number }).code !== 4902) throw error;
-        await provider.request({
-          method: "wallet_addEthereumChain",
-          params: [ROBINHOOD_CHAIN],
-        });
-      }
+      await ensureRobinhoodChain(provider);
 
       setAddress(account);
       setStatus("idle");
@@ -101,7 +111,39 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  const value = useMemo(() => ({ address, status, connect }), [address, status]);
+  async function sendTransaction(transaction: {
+    from: string;
+    to: string;
+    data: string;
+    gasLimit: string;
+  }) {
+    const provider = metaMaskProvider();
+    if (!provider) throw new Error("MetaMask is not installed");
+    if (!address || transaction.from.toLowerCase() !== address.toLowerCase()) {
+      throw new Error("The prepared creator wallet is no longer connected");
+    }
+    await ensureRobinhoodChain(provider);
+    const chainId = await provider.request({ method: "eth_chainId" });
+    if (chainId !== ROBINHOOD_CHAIN.chainId) {
+      throw new Error("MetaMask is not connected to Robinhood Chain");
+    }
+    const hash = await provider.request({
+      method: "eth_sendTransaction",
+      params: [{
+        from: address,
+        to: transaction.to,
+        data: transaction.data,
+        gas: `0x${BigInt(transaction.gasLimit).toString(16)}`,
+        value: "0x0",
+      }],
+    });
+    if (typeof hash !== "string" || !/^0x[a-fA-F0-9]{64}$/.test(hash)) {
+      throw new Error("MetaMask did not return a transaction hash");
+    }
+    return hash;
+  }
+
+  const value = { address, status, connect, sendTransaction };
   return <WalletContext.Provider value={value}>{children}</WalletContext.Provider>;
 }
 

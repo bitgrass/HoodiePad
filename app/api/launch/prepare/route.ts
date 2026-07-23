@@ -1,5 +1,11 @@
 import product from "../../../../config/hoodiepad-v1.json";
+import {
+  getCalibrationReport,
+  isCalibrationReportApproved,
+} from "../../../lib/calibration";
+import { readChainStatus, simulateLaunch } from "../../../lib/protocol";
 import { getRuntimeEnv } from "../../../runtime-env";
+import type { Address } from "viem";
 
 type LaunchDraft = {
   name?: unknown;
@@ -28,6 +34,41 @@ async function checksum(value: unknown) {
   const bytes = new TextEncoder().encode(JSON.stringify(value));
   const digest = await crypto.subtle.digest("SHA-256", bytes);
   return `0x${Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
+}
+
+async function storeMetadata(request: Request, launch: {
+  name: string;
+  symbol: string;
+  description: string;
+  artworkUrl: string;
+  artworkSha256: string;
+  website: string;
+  xUrl: string;
+}) {
+  const metadata = {
+    name: launch.name,
+    symbol: launch.symbol,
+    description: launch.description,
+    image: launch.artworkUrl,
+    external_url: launch.website || undefined,
+    properties: {
+      x_url: launch.xUrl || undefined,
+      artwork_sha256: launch.artworkSha256,
+      launchpad: "HoodiePad",
+      chain_id: product.network.chainId,
+      canonical_numeraire: product.contracts.hoodie,
+    },
+  };
+  const encoded = new TextEncoder().encode(JSON.stringify(metadata));
+  const digest = (await checksum(metadata)).slice(2);
+  const key = `token-metadata/${digest}.json`;
+  await getRuntimeEnv().ARTWORK.put(key, encoded, {
+    httpMetadata: { contentType: "application/json", cacheControl: "public, max-age=31536000, immutable" },
+    customMetadata: { sha256: digest },
+  });
+  const url = new URL("/api/metadata", request.url);
+  url.searchParams.set("key", key);
+  return { key, url: url.toString(), sha256: digest };
 }
 
 export async function POST(request: Request) {
@@ -66,6 +107,13 @@ export async function POST(request: Request) {
     return Response.json({ error: "Launch draft failed validation" }, { status: 422 });
   }
 
+  if (body.payoutWallet.toLowerCase() === product.contracts.hoodieEcosystemSafe.toLowerCase()) {
+    return Response.json(
+      { error: "The connected creator wallet must be different from the HOODIE ecosystem Safe." },
+      { status: 422 },
+    );
+  }
+
   const artworkObject = await getRuntimeEnv().ARTWORK.head(artworkKey);
   if (!artworkObject || artworkObject.customMetadata?.sha256 !== artworkSha256) {
     return Response.json({ error: "Uploaded artwork could not be verified" }, { status: 422 });
@@ -73,7 +121,10 @@ export async function POST(request: Request) {
 
   const ecosystemSafe = product.contracts.hoodieEcosystemSafe;
   const safeConfigured = addressPattern.test(ecosystemSafe) && !/^0x0{40}$/i.test(ecosystemSafe);
-  const curveCalibrated = product.pool.curveStatus === "calibrated";
+  const calibrationReport = getCalibrationReport();
+  const curveCalibrated = isCalibrationReportApproved(calibrationReport);
+  const externalReviewApproved =
+    process.env.HOODIEPAD_EXTERNAL_REVIEW_APPROVED === "true";
   const broadcastEnabled = process.env.HOODIEPAD_BROADCAST_ENABLED === "true";
 
   const normalized = {
@@ -97,17 +148,70 @@ export async function POST(request: Request) {
     governance: product.pool.governance,
   };
 
+  const metadata = await storeMetadata(request, {
+    name: normalized.name,
+    symbol,
+    description: normalized.description,
+    artworkUrl,
+    artworkSha256,
+    website: normalized.website,
+    xUrl: normalized.xUrl,
+  });
+  const chainStatus = await readChainStatus();
+  const simulation = chainStatus.available
+    ? await simulateLaunch({
+        name: normalized.name,
+        symbol,
+        tokenURI: metadata.url,
+        creator: normalized.creatorFeeRecipient as Address,
+        chainStatus,
+      })
+    : { status: "unavailable" as const, error: chainStatus.error };
+
   const blockers = [
     ...(!safeConfigured ? ["Configure the HOODIE ecosystem Safe."] : []),
     ...(!curveCalibrated ? ["Calibrate and snapshot the Robinhood V3 curve on a mainnet fork."] : []),
+    ...(!externalReviewApproved ? ["Record external launch-adapter review approval."] : []),
+    ...(!chainStatus.available ? ["Live Robinhood RPC verification is unavailable."] : []),
+    ...(chainStatus.available && simulation.status !== "simulated"
+      ? ["Canonical Doppler launch simulation did not complete."]
+      : []),
     ...(!broadcastEnabled ? ["Mainnet broadcast is disabled by policy."] : []),
   ];
+  const productionReady = blockers.length === 0;
+  const publicSimulation = { ...simulation, calldata: undefined };
+  const deployment =
+    productionReady &&
+    simulation.status === "simulated" &&
+    simulation.calldata &&
+    simulation.airlock &&
+    simulation.gasEstimate
+      ? {
+          chainId: product.network.chainId,
+          from: normalized.creatorFeeRecipient,
+          to: simulation.airlock,
+          data: simulation.calldata,
+          gasLimit: (BigInt(simulation.gasEstimate) * 120n / 100n).toString(),
+          predictedToken: simulation.asset,
+          predictedPool: simulation.pool,
+          validUntil: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+        }
+      : null;
 
   return Response.json({
     checksum: await checksum(normalized),
     preparedAt: new Date().toISOString(),
-    productionReady: blockers.length === 0,
+    productionReady,
     blockers,
     config: normalized,
+    metadata,
+    calibration: {
+      status: calibrationReport.status,
+      forkBlock: calibrationReport.forkBlock,
+      approved: curveCalibrated,
+    },
+    chainStatus,
+    simulation: publicSimulation,
+    deployment,
   });
 }
