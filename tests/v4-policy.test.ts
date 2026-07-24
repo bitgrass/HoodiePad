@@ -11,7 +11,10 @@ import {
 import {
   DECLARED_DOPPLER_SDK_VERSION,
   getHoodieV4Curve,
+  getHoodieReferencePoolId,
+  getHoodieReferencePoolKey,
   getV4Beneficiaries,
+  isHoodieReferencePoolKeyValid,
   isExactV4SdkInstalled,
   V4_DYNAMIC_FEE_FLAG,
   V4_LP_FEE,
@@ -59,6 +62,20 @@ test("freezes HoodiePad V2 supply, wallet, fee, and curve policy", () => {
     [8, 12, 16],
   );
   assert.equal(curve.tickSpacing, 200);
+});
+
+test("pins the complete HOODIE/WETH V4 PoolKey to the live PoolId", () => {
+  const key = getHoodieReferencePoolKey();
+  assert.equal(key.currency0, getAddress(product.contracts.weth));
+  assert.equal(key.currency1, getAddress(product.contracts.hoodie));
+  assert.equal(key.fee, V4_DYNAMIC_FEE_FLAG);
+  assert.equal(key.tickSpacing, V4_TICK_SPACING);
+  assert.equal(key.hooks, getAddress(product.contracts.dopplerHookInitializer));
+  assert.equal(
+    getHoodieReferencePoolId(),
+    "0x590eb1069a71fe72e3470f094c324513da3691987868a2b355fd8f29713d889b",
+  );
+  assert.equal(isHoodieReferencePoolKeyValid(), true);
 });
 
 test("sorts the distinct 80/15/5 V4 beneficiaries", () => {

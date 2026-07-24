@@ -6,6 +6,7 @@ import {
 } from "../app/lib/v4-calibration";
 import {
   DECLARED_DOPPLER_SDK_VERSION,
+  isHoodieReferencePoolKeyValid,
   isExactV4SdkInstalled,
   isV4RuntimeSnapshotApproved,
 } from "../app/lib/v4-policy";
@@ -19,7 +20,9 @@ const report = getV4CalibrationReport();
 const calibrationApproved = isV4CalibrationApproved(report);
 const runtimeApproved = isV4RuntimeSnapshotApproved();
 const exactSdk = isExactV4SdkInstalled();
-const poolKeyPinned = product.hoodieReferencePool.poolKey !== null;
+const poolKeyPinned =
+  product.hoodieReferencePool.poolKey !== null &&
+  isHoodieReferencePoolKeyValid();
 const releasePolicy = getReleasePolicy();
 const launchVersion =
   process.env.HOODIEPAD_LAUNCH_VERSION?.trim().toLowerCase();
@@ -39,7 +42,7 @@ line("Launch version", versionConfigured ? "V2" : "NOT V2");
 line("Required Doppler SDK", product.dependencies.dopplerSdk);
 line("Declared Doppler SDK", DECLARED_DOPPLER_SDK_VERSION);
 line("Runtime snapshot", runtimeApproved ? "APPROVED" : "NOT APPROVED");
-line("Reference PoolKey", poolKeyPinned ? "PINNED" : "MISSING");
+line("Reference PoolKey", poolKeyPinned ? "VALID" : "MISSING/INVALID");
 line("Calibration", calibrationApproved ? "PASSED" : report.status.toUpperCase());
 line(
   "Calibration config",
@@ -65,7 +68,7 @@ const blockers = [
     ? ["The reviewed V4 runtime bytecode snapshot is not approved."]
     : []),
   ...(!poolKeyPinned
-    ? ["The complete HOODIE/WETH V4 PoolKey is not pinned."]
+    ? ["The complete HOODIE/WETH V4 PoolKey is missing or does not match its PoolId."]
     : []),
   ...(!calibrationApproved
     ? ["The complete Robinhood V4 fork calibration has not passed."]

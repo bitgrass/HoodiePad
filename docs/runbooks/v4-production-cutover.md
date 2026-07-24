@@ -23,13 +23,33 @@ Do not configure a private key or server signer.
 ## Launch enablement prerequisites
 
 1. Install and lock the exact reviewed SDK and optional router versions.
-2. Discover the full HOODIE/WETH V4 PoolKey and recompute its PoolId.
-3. Record, review, and approve every required runtime bytecode hash.
-4. Implement and pass every check in
-   `REQUIRED_V4_CALIBRATION_CHECKS` on a fresh disposable Robinhood fork.
-5. Obtain independent external review.
-6. Run `npm run verify:robinhood:v4`.
-7. Run `npm run verify:release` with broadcast still disabled.
+2. Keep `HOODIEPAD_BROADCAST_ENABLED=false`.
+3. Generate the read-only runtime proposal:
+
+   ```text
+   npm run report:robinhood:v4-runtime
+   ```
+
+4. Review every address, bytecode hash, Airlock module state, and the complete
+   HOODIE/WETH V4 PoolKey. Confirm its recomputed PoolId is
+   `0x590eb1069a71fe72e3470f094c324513da3691987868a2b355fd8f29713d889b`.
+5. Approve only that exact reviewed proposal checksum:
+
+   ```text
+   npm run approve:robinhood:v4-runtime -- --checksum 0x...
+   ```
+
+6. Run `npm run calibrate:robinhood:v4` on a fresh disposable fork. It must
+   pass every name in `REQUIRED_V4_CALIBRATION_CHECKS`, including the exact
+   launch, direct HOODIE swaps, ETH multihop swaps, wallet-limit expiry,
+   slippage/deadline rejection, PoolManager Swap indexing, and 80/15/5 claims.
+7. Obtain independent external review.
+8. Run `npm run verify:robinhood:v4`.
+9. Run `npm run verify:release` with broadcast still disabled.
+
+Runtime approval and fork calibration are repository evidence. They do not
+replace independent external review and they never authorize a mainnet
+transaction by themselves.
 
 ## Canary
 

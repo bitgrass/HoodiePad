@@ -59,11 +59,22 @@ separate V4 calibration report and never accepts the old V3 report.
 Configure `Alchemy_API_KEY` in `.env.local`, then run:
 
 ```bash
+npm run report:robinhood:v4-runtime
+```
+
+The report is deliberately unapproved. Review its addresses, bytecode hashes,
+Airlock module states, reference PoolKey, and PoolId. Only after that review,
+copy the printed proposal checksum into:
+
+```bash
+npm run approve:robinhood:v4-runtime -- --checksum 0x...
 npm run calibrate:robinhood:v4
 ```
 
-A successful V2 run replaces `config/hoodie-v4-calibration.json` only after
-every required launch, swap, policy, indexing, and fee-claim check passes.
+Approval records the reviewed runtime evidence; it does not enable deployment.
+A successful V2 calibration replaces `config/hoodie-v4-calibration.json` only
+after every required launch, direct and ETH-routed swap, policy, indexing,
+slippage, wallet-limit, and 80/15/5 fee-claim check passes.
 
 ## Live Robinhood verification
 

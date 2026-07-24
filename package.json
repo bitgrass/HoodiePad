@@ -18,7 +18,9 @@
     "calibrate:robinhood": "tsx --env-file=.env.local scripts/calibrate-robinhood.ts",
     "verify:release": "tsx --env-file=.env.local scripts/verify-release.ts",
     "calibrate:robinhood:v4": "tsx --env-file=.env.local scripts/calibrate-robinhood-v4.ts",
-    "verify:robinhood:v4": "tsx --env-file=.env.local scripts/verify-robinhood-v4.ts"
+    "verify:robinhood:v4": "tsx --env-file=.env.local scripts/verify-robinhood-v4.ts",
+    "report:robinhood:v4-runtime": "tsx --env-file=.env.local scripts/report-robinhood-v4-runtime.ts",
+    "approve:robinhood:v4-runtime": "tsx scripts/approve-robinhood-v4-runtime.ts"
   },
   "dependencies": {
     "@whetstone-research/doppler-sdk": "1.0.32",

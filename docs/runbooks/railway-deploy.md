@@ -57,6 +57,19 @@ commit an `.env` file.
 Do not set `PORT`; Railway injects it. Do not set `EVM_RH_PK` or any other
 private key. The production server has no signing path.
 
+While runtime review, fork calibration, or external review remains incomplete,
+the correct Railway values are:
+
+```text
+HOODIEPAD_LAUNCH_VERSION=v2
+HOODIEPAD_EXTERNAL_REVIEW_APPROVED=false
+HOODIEPAD_OWNER_RISK_WAIVER=false
+HOODIEPAD_BROADCAST_ENABLED=false
+```
+
+The launch page will show a draft and its remaining blockers in this state.
+Do not change the last three values merely to hide that message.
+
 `ROBINHOOD_RPC_URL` is optional. When it is absent, HoodiePad derives the
 Robinhood Alchemy endpoint from `Alchemy_API_KEY`. If it is configured, it
 overrides the Alchemy endpoint.

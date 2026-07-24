@@ -25,9 +25,15 @@
   },
   "hoodieReferencePool": {
     "protocol": "uniswap-v4",
-    "poolId": "0x3689064ea666e140bc2e1441118f8a3176cbd042a8e4c3abc18ca41cf9bfa3e8",
-    "poolKey": null,
-    "status": "full-pool-key-fork-verification-required"
+    "poolId": "0x590eb1069a71fe72e3470f094c324513da3691987868a2b355fd8f29713d889b",
+    "poolKey": {
+      "currency0": "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
+      "currency1": "0xC72c01AAB5f5678dc1d6f5C6d2B417d91D402Ba3",
+      "fee": 8388608,
+      "tickSpacing": 200,
+      "hooks": "0x4e3468951D49f2EEa976eD0D6e75fFCb44a9a544"
+    },
+    "status": "pinned-pending-fork-verification"
   },
   "discovery": {
     "launchStartBlock": "17600000",

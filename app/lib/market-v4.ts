@@ -343,7 +343,7 @@ export async function readHoodiePadV4Market(
 export async function readVersionedHoodiePadMarket(
   rawAddress: string,
   client = createRobinhoodPublicClient(),
-) {
+): Promise<HoodiePadV4Market | HoodiePadMarket> {
   const address = getAddress(rawAddress);
   const assetData = await client.readContract({
     address: getAddress(product.contracts.airlock),

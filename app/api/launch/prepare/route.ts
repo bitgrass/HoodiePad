@@ -1,5 +1,5 @@
 import { getAirlockOwner } from "@whetstone-research/doppler-sdk/evm";
-import type { Address } from "viem";
+import type { Address, Hex } from "viem";
 import product from "../../../../config/hoodiepad-v2.json";
 import {
   getV4CalibrationReport,
@@ -8,9 +8,12 @@ import {
 import {
   DECLARED_DOPPLER_SDK_VERSION,
   getV4ConfigHash,
+  isHoodieReferencePoolKeyValid,
   isExactV4SdkInstalled,
   isV4RuntimeSnapshotApproved,
+  verifyV4RuntimeSnapshot,
 } from "../../../lib/v4-policy";
+import { simulateV4Launch } from "../../../lib/v4-launch";
 import { createRobinhoodPublicClient } from "../../../lib/protocol";
 import { getReleasePolicy } from "../../../lib/release-policy";
 import {
@@ -38,6 +41,7 @@ type V4ChainStatus = {
   chainId?: number;
   blockNumber?: string;
   airlockOwner?: Address;
+  runtimeSnapshotVerified?: boolean;
 };
 
 const addressPattern = /^0x[a-fA-F0-9]{40}$/;
@@ -69,10 +73,12 @@ async function readV4ChainStatus(): Promise<V4ChainStatus> {
   const checkedAt = new Date().toISOString();
   try {
     const client = createRobinhoodPublicClient();
-    const [chainId, blockNumber, airlockOwner] = await Promise.all([
+    const [chainId, blockNumber, airlockOwner, runtimeSnapshotVerified] =
+      await Promise.all([
       client.getChainId(),
       client.getBlockNumber(),
       getAirlockOwner(client),
+      verifyV4RuntimeSnapshot(client),
     ]);
     if (chainId !== product.network.chainId) {
       throw new Error(`RPC returned chain ${chainId}; expected ${product.network.chainId}`);
@@ -83,6 +89,7 @@ async function readV4ChainStatus(): Promise<V4ChainStatus> {
       chainId,
       blockNumber: blockNumber.toString(),
       airlockOwner,
+      runtimeSnapshotVerified,
     };
   } catch (error) {
     return {
@@ -240,17 +247,99 @@ export async function POST(request: Request) {
   const calibrationApproved = isV4CalibrationApproved(calibrationReport);
   const releasePolicy = getReleasePolicy();
   const chainStatus = await readV4ChainStatus();
+  const poolKeyValid = isHoodieReferencePoolKeyValid();
+  const exactSdkInstalled = isExactV4SdkInstalled();
+  const runtimeSnapshotApproved = isV4RuntimeSnapshotApproved();
+  let simulation:
+    | {
+        status: "simulated";
+        asset: Address;
+        pool: Hex;
+        gasEstimate?: string;
+        priceReference: Awaited<
+          ReturnType<typeof simulateV4Launch>
+        >["price"];
+      }
+    | { status: "unavailable"; error: string } = {
+      status: "unavailable",
+      error: "V4 simulation is fail-closed until the complete calibration gate passes.",
+    };
+  let deployment: {
+    chainId: number;
+    from: string;
+    to: string;
+    data: Hex;
+    gasLimit: string;
+    predictedToken: Address;
+    predictedPool: Hex;
+    validUntil: string;
+  } | null = null;
+
+  const simulationGatesPassed =
+    launchVersionConfigured &&
+    exactSdkInstalled &&
+    runtimeSnapshotApproved &&
+    chainStatus.runtimeSnapshotVerified === true &&
+    poolKeyValid &&
+    calibrationApproved &&
+    chainStatus.available &&
+    chainStatus.airlockOwner;
+  if (simulationGatesPassed) {
+    try {
+      const result = await simulateV4Launch(
+        createRobinhoodPublicClient(),
+        {
+          name: normalized.name,
+          symbol,
+          tokenURI: metadata.url,
+          creator: body.payoutWallet as Address,
+        },
+        chainStatus.airlockOwner as Address,
+      );
+      simulation = {
+        status: "simulated",
+        asset: result.asset,
+        pool: result.pool,
+        gasEstimate: result.gasEstimate?.toString(),
+        priceReference: result.price,
+      };
+      if (
+        releasePolicy.externalReviewApproved &&
+        releasePolicy.broadcastEnabled &&
+        result.gasEstimate
+      ) {
+        deployment = {
+          chainId: product.network.chainId,
+          from: body.payoutWallet,
+          to: product.contracts.airlock,
+          data: result.calldata,
+          gasLimit: (result.gasEstimate * 120n / 100n).toString(),
+          predictedToken: result.asset,
+          predictedPool: result.pool,
+          validUntil: new Date(
+            Date.now() + product.pricing.preparedLaunchValiditySeconds * 1_000,
+          ).toISOString(),
+        };
+      }
+    } catch (error) {
+      simulation = { status: "unavailable", error: safeError(error) };
+    }
+  }
+
   const blockers = [
     ...(!launchVersionConfigured
       ? ["Set HOODIEPAD_LAUNCH_VERSION=v2. Legacy V3 launches are disabled."]
       : []),
-    ...(!isExactV4SdkInstalled()
+    ...(!exactSdkInstalled
       ? [`Install and lock exact Doppler SDK ${product.dependencies.dopplerSdk}; package.json declares ${DECLARED_DOPPLER_SDK_VERSION}.`]
       : []),
-    ...(!isV4RuntimeSnapshotApproved()
+    ...(!runtimeSnapshotApproved
       ? ["Review and approve the V4 runtime bytecode snapshot."]
       : []),
-    ...(product.hoodieReferencePool.poolKey === null
+    ...(runtimeSnapshotApproved && chainStatus.runtimeSnapshotVerified !== true
+      ? ["Live Robinhood runtime bytecode does not match the approved V4 snapshot."]
+      : []),
+    ...(!poolKeyValid
       ? ["Discover and verify the complete HOODIE/WETH V4 PoolKey."]
       : []),
     ...(!calibrationApproved
@@ -265,13 +354,19 @@ export async function POST(request: Request) {
     ...(!releasePolicy.broadcastEnabled
       ? ["Mainnet broadcast remains disabled by policy."]
       : []),
-    "V4 launch calldata remains disabled until the isolated fork launch, swaps, and fee claims pass.",
+    ...(simulation.status !== "simulated"
+      ? ["V4 launch calldata remains disabled until the isolated fork launch, swaps, and fee claims pass."]
+      : []),
   ];
+  const productionReady =
+    blockers.length === 0 &&
+    simulation.status === "simulated" &&
+    deployment !== null;
 
   return Response.json({
     checksum: await checksum(normalized),
     preparedAt: new Date().toISOString(),
-    productionReady: false,
+    productionReady,
     blockers,
     config: normalized,
     metadata,
@@ -281,10 +376,7 @@ export async function POST(request: Request) {
       approved: calibrationApproved,
     },
     chainStatus,
-    simulation: {
-      status: "unavailable",
-      error: "V4 simulation is fail-closed until the complete calibration gate passes.",
-    },
-    deployment: null,
+    simulation,
+    deployment,
   });
 }
