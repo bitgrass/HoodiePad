@@ -114,15 +114,32 @@ export default async function TokenPage({
               <code>{shorten(market.address)}</code> ↗
             </a>
           </div>
-          <span className={`status-chip${market.official && market.hasSwapActivity ? "" : " is-warning"}`}>
-            {!market.official
+          <span className={`status-chip${isV4 && market.official && market.hasSwapActivity ? "" : " is-warning"}`}>
+            {!isV4
+              ? "Legacy V3 · historical"
+              : !market.official
               ? "Unverified configuration"
               : market.hasSwapActivity
                 ? "Market active"
                 : "Pool ready · awaiting first trade"}
           </span>
         </div>
-        {market.official && !market.hasSwapActivity && (
+        {!isV4 && (
+          <div className="market-activation-banner">
+            <div>
+              <strong>This is a historical HoodiePad V1 market.</strong>
+              <p>
+                HoodiePad V2 is V4-only. This immutable V3 market remains visible
+                for transparency, but it is excluded from discovery, analytics,
+                and in-app trading.
+              </p>
+            </div>
+            <a href={uniswapPool} target="_blank" rel="noreferrer">
+              View historical pool ↗
+            </a>
+          </div>
+        )}
+        {isV4 && market.official && !market.hasSwapActivity && (
           <div className="market-activation-banner">
             <div>
               <strong>The pool is funded and ready; it has not traded yet.</strong>
@@ -157,7 +174,11 @@ export default async function TokenPage({
               <strong>{market.fdvHoodie} HOODIE</strong>
             </div>
             <span className="live-chain-chip">
-              {market.hasSwapActivity ? "ACTIVE · ONCHAIN" : "POOL READY"}
+              {!isV4
+                ? "LEGACY V3"
+                : market.hasSwapActivity
+                  ? "ACTIVE · ONCHAIN"
+                  : "POOL READY"}
             </span>
           </div>
           <MarketChart token={market.address} initialPrice={market.hoodiePerToken} />
@@ -165,7 +186,9 @@ export default async function TokenPage({
             <a href={explorerPool} target="_blank" rel="noreferrer">
               {isV4 ? "Pool ID" : "Pool"} {shorten(market.pool)} ↗
             </a>
-            <span>Live Swap events · Robinhood Chain</span>
+            <span>
+              {isV4 ? "Live V4 Swap events" : "Historical V3 Swap events"} · Robinhood Chain
+            </span>
           </div>
           <div className="token-stat-row">
             <div><span>Swap history</span><strong>{market.hasSwapActivity ? "Detected" : "None yet"}</strong></div>
@@ -175,12 +198,32 @@ export default async function TokenPage({
           </div>
         </div>
 
-        <SwapPanel
-          token={market.address}
-          symbol={market.symbol}
-          poolUrl={uniswapPool}
-          marketVersion={market.version}
-        />
+        {isV4 ? (
+          <SwapPanel
+            token={market.address}
+            symbol={market.symbol}
+            poolUrl={uniswapPool}
+            marketVersion={market.version}
+          />
+        ) : (
+          <aside className="trade-panel">
+            <span className="preview-label">HISTORICAL V3 MARKET</span>
+            <h2>In-app trading is unavailable.</h2>
+            <p className="trade-warning">
+              HoodiePad V2 supports canonical Multicurve V4 markets only. This
+              page is retained as read-only history and does not contribute to
+              public HoodiePad analytics.
+            </p>
+            <a
+              className="button full-width"
+              href={uniswapPool}
+              target="_blank"
+              rel="noreferrer"
+            >
+              View historical pool on Uniswap ↗
+            </a>
+          </aside>
+        )}
       </section>
 
       <MarketActivity token={market.address} symbol={market.symbol} />

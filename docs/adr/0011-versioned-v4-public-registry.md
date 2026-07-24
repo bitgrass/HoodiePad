@@ -19,9 +19,11 @@ HoodiePad public discovery is V4-only:
   and token policy reads;
 - legacy V3 launches are excluded from public lists and aggregate analytics.
 
-The legacy V3 reader remains available for direct historical token pages,
-regression tests, audit evidence, and rollback. HoodiePad does not delete or
-misrepresent those immutable markets.
+The legacy V3 reader remains available for direct, read-only historical token
+pages, regression tests, audit evidence, and rollback. Historical pages are
+clearly labelled, expose no HoodiePad trading controls, and remain excluded
+from discovery and analytics. HoodiePad does not delete or misrepresent those
+immutable markets.
 
 ## Required V4 public invariants
 

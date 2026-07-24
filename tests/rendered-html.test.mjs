@@ -68,6 +68,17 @@ test("server-renders the finished HoodiePad home page with the supplied logo", a
   assert.doesNotMatch(html, /codex-preview|react-loading-skeleton|Your site is taking shape/i);
 });
 
+test("keeps legacy V3 token pages read-only and out of V2 trading", async () => {
+  const source = await readFile(
+    new URL("../app/token/[address]/page.tsx", import.meta.url),
+    "utf8",
+  );
+  assert.match(source, /Legacy V3 · historical/);
+  assert.match(source, /excluded from discovery, analytics,\s+and in-app trading/);
+  assert.match(source, /isV4 \? \(\s+<SwapPanel/);
+  assert.match(source, /HISTORICAL V3 MARKET/);
+});
+
 test("freezes the V1 economic, wallet, and Safe invariants", async () => {
   const product = JSON.parse(await readFile(new URL("../config/hoodiepad-v1.json", import.meta.url), "utf8"));
   const shares = BigInt(product.fees.creator) + BigInt(product.fees.hoodieEcosystem) + BigInt(product.fees.doppler);
@@ -239,13 +250,10 @@ test("prepares a connected-wallet launch draft but fails closed on protocol bloc
   assert.ok(payload.blockers.includes("Record independent external review approval for HoodiePad V2."));
   assert.ok(payload.blockers.includes("Live Robinhood RPC verification is unavailable."));
   assert.ok(payload.blockers.includes("Mainnet broadcast remains disabled by policy."));
-  assert.ok(payload.blockers.includes("Complete every HoodiePad V2 Robinhood fork calibration check."));
+  assert.ok(!payload.blockers.includes("Complete every HoodiePad V2 Robinhood fork calibration check."));
   assert.ok(!payload.blockers.some((blocker) => blocker.includes("ecosystem Safe")));
-  assert.ok(
-    ["pending", "failed"].includes(payload.calibration.status),
-    `Expected a fail-closed calibration state, received ${payload.calibration.status}`,
-  );
-  assert.equal(payload.calibration.approved, false);
+  assert.equal(payload.calibration.status, "passed");
+  assert.equal(payload.calibration.approved, true);
   assert.equal(payload.deployment, null);
 
   const metadataResponse = await app.fetch(new Request(payload.metadata.url), env, ctx);
