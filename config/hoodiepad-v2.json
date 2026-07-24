@@ -18,7 +18,7 @@
     "noOpGovernanceFactory": "0x85f37f74Ef2478A770318bc810177a9835911aD7",
     "noOpMigrator": "0xba2F330EDb16cD8056f5988d8CE19BbC63475A0e",
     "uniswapV4PoolManager": "0x8366a39Cc670B4001A1121b8f6A443a643E40951",
-    "uniswapV4StateView": "0x5CbD0A27C2745754F17C6D86bA5AE5d29E3Bb813",
+    "uniswapV4StateView": "0xf3334192d15450cdd385c8b70e03f9a6bd9e673b",
     "uniswapV4Quoter": "0x8dc178efb8111bb0973dd9d722ebeff267c98f94",
     "uniswapUniversalRouter": "0x8876789976DEcBFCbbbe364623C63652Db8c0904",
     "permit2": "0x000000000022D473030F116dDEE9F6B43aC78BA3"

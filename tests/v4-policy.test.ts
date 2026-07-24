@@ -66,6 +66,10 @@ test("freezes HoodiePad V2 supply, wallet, fee, and curve policy", () => {
 
 test("pins the complete HOODIE/WETH V4 PoolKey to the live PoolId", () => {
   const key = getHoodieReferencePoolKey();
+  assert.equal(
+    getAddress(product.contracts.uniswapV4StateView),
+    getAddress("0xf3334192d15450cdd385c8b70e03f9a6bd9e673b"),
+  );
   assert.equal(key.currency0, getAddress(product.contracts.weth));
   assert.equal(key.currency1, getAddress(product.contracts.hoodie));
   assert.equal(key.fee, V4_DYNAMIC_FEE_FLAG);
