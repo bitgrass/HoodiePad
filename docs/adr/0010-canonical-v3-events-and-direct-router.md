@@ -41,8 +41,13 @@ In-app execution keeps the canonical V3 Quoter but uses Uniswap's official
 Robinhood `SwapRouter02` at:
 
 ```text
-0x8bcEaA40B9AcdfAedF85AdF4FF01F5Ad6517937f
+0xCaf681a66D020601342297493863E78C959E5cb2
 ```
+
+The previously pinned `0x8bcE...7937f` address is the Robinhood
+`UniswapV2Factory`, not `SwapRouter02`. HoodiePad now verifies that the router
+has bytecode and reports the expected V3 factory and WETH dependencies before
+preparing any approval or swap transaction.
 
 The wallet approves only the exact input amount to that router. HoodiePad then
 re-quotes, checks the active maximum-wallet rule, estimates the direct

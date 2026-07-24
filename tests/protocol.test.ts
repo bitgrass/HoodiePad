@@ -23,6 +23,7 @@ import { getReleasePolicy } from "../app/lib/release-policy";
 import {
   encodeV3ExactInputSwap,
   estimateMaxInputAtSpot,
+  routerDeploymentMatches,
 } from "../app/lib/swap";
 import {
   checkObjectStorage,
@@ -235,6 +236,79 @@ test("encodes an exact-input HoodiePad V3 swap with recipient and slippage prote
   assert.equal(exactInput.args[0].amountIn, 1_000_000n);
   assert.equal(exactInput.args[0].amountOutMinimum, 9_000_000n);
   assert.equal(exactInput.args[0].sqrtPriceLimitX96, 0n);
+});
+
+test("encodes the reverse child-token sell through the same verified V3 router", () => {
+  const recipient = getAddress("0x1111111111111111111111111111111111111111");
+  const hoodie = getAddress("0xC72c01AAB5f5678dc1d6f5C6d2B417d91D402Ba3");
+  const child = getAddress("0x5E6440a7f4c82a10Fee94568C17cD07A4eA8F515");
+  const data = encodeV3ExactInputSwap({
+    recipient,
+    tokenIn: child,
+    tokenOut: hoodie,
+    amountIn: 20_000_000n,
+    minimumOut: 1_000_000n,
+    fee: 10_000,
+    deadline: 1_800_000_000n,
+  });
+  const multicall = decodeFunctionData({
+    abi: parseAbi(["function multicall(uint256 deadline,bytes[] data) payable returns (bytes[] results)"]),
+    data,
+  });
+  const exactInput = decodeFunctionData({
+    abi: parseAbi([
+      "function exactInputSingle((address tokenIn,address tokenOut,uint24 fee,address recipient,uint256 amountIn,uint256 amountOutMinimum,uint160 sqrtPriceLimitX96) params) payable returns (uint256 amountOut)",
+    ]),
+    data: multicall.args[1][0],
+  });
+  assert.equal(exactInput.args[0].tokenIn, child);
+  assert.equal(exactInput.args[0].tokenOut, hoodie);
+  assert.equal(exactInput.args[0].amountIn, 20_000_000n);
+  assert.equal(exactInput.args[0].amountOutMinimum, 1_000_000n);
+});
+
+test("pins the verified Robinhood SwapRouter02 instead of the V2 factory", async () => {
+  const product = JSON.parse(
+    await readFile(new URL("../config/hoodiepad-v1.json", import.meta.url), "utf8"),
+  );
+  assert.equal(
+    product.contracts.uniswapSwapRouter02,
+    "0xCaf681a66D020601342297493863E78C959E5cb2",
+  );
+  assert.equal(
+    product.contracts.uniswapV3Factory,
+    "0x1f7d7550B1b028f7571E69A784071F0205FD2EfA",
+  );
+  assert.notEqual(
+    product.contracts.uniswapSwapRouter02.toLowerCase(),
+    "0x8bceaa40b9acdfaedf85adf4ff01f5ad6517937f",
+  );
+});
+
+test("verifies the router bytecode, V3 factory, and wrapped-native dependency", () => {
+  const factory = getAddress("0x1f7d7550B1b028f7571E69A784071F0205FD2EfA");
+  const weth = getAddress("0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73");
+  assert.equal(routerDeploymentMatches({
+    code: "0x60006000",
+    factory,
+    weth,
+    expectedFactory: factory,
+    expectedWeth: weth,
+  }), true);
+  assert.equal(routerDeploymentMatches({
+    code: "0x",
+    factory,
+    weth,
+    expectedFactory: factory,
+    expectedWeth: weth,
+  }), false);
+  assert.equal(routerDeploymentMatches({
+    code: "0x60006000",
+    factory: getAddress("0x8bcEaA40B9AcdfAedF85AdF4FF01F5Ad6517937f"),
+    weth,
+    expectedFactory: factory,
+    expectedWeth: weth,
+  }), false);
 });
 
 test("prevents oversized buys before invoking the V3 quoter during the 2% wallet window", () => {

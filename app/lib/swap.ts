@@ -24,6 +24,8 @@ const erc20Abi = parseAbi([
   "function approve(address spender,uint256 amount) returns (bool)",
 ]);
 const swapRouter02Abi = parseAbi([
+  "function factory() view returns (address)",
+  "function WETH9() view returns (address)",
   "function exactInputSingle((address tokenIn,address tokenOut,uint24 fee,address recipient,uint256 amountIn,uint256 amountOutMinimum,uint160 sqrtPriceLimitX96) params) payable returns (uint256 amountOut)",
   "function multicall(uint256 deadline,bytes[] data) payable returns (bytes[] results)",
 ]);
@@ -93,6 +95,19 @@ function isQuoterRevert(error: unknown) {
 function formattedMaximumInput(raw: bigint) {
   const conservative = raw * 995n / 1_000n;
   return formatUnits(conservative > 0n ? conservative : raw, 18);
+}
+
+export function routerDeploymentMatches(input: {
+  code: Hex | undefined;
+  factory: Address;
+  weth: Address;
+  expectedFactory: Address;
+  expectedWeth: Address;
+}) {
+  return !!input.code &&
+    input.code !== "0x" &&
+    input.factory.toLowerCase() === input.expectedFactory.toLowerCase() &&
+    input.weth.toLowerCase() === input.expectedWeth.toLowerCase();
 }
 
 export function estimateMaxInputAtSpot(input: {
@@ -175,8 +190,21 @@ export async function prepareHoodiePadSwap(input: {
 
   const addresses = getAddresses(ROBINHOOD_CHAIN_ID);
   const swapRouter = getAddress(product.contracts.uniswapSwapRouter02);
+  const expectedV3Factory = getAddress(product.contracts.uniswapV3Factory);
+  const expectedWeth = getAddress(product.contracts.weth);
+  const sdkV3Factory = addresses.uniswapV3Factory
+    ? getAddress(addresses.uniswapV3Factory)
+    : undefined;
+  const sdkV2Factory = addresses.uniswapV2Factory
+    ? getAddress(addresses.uniswapV2Factory)
+    : undefined;
   if (
-    addresses.v3Quoter.toLowerCase() !== product.contracts.uniswapV3Quoter.toLowerCase()
+    !sdkV3Factory ||
+    !sdkV2Factory ||
+    addresses.v3Quoter.toLowerCase() !== product.contracts.uniswapV3Quoter.toLowerCase() ||
+    sdkV3Factory.toLowerCase() !== expectedV3Factory.toLowerCase() ||
+    addresses.weth.toLowerCase() !== expectedWeth.toLowerCase() ||
+    swapRouter.toLowerCase() === sdkV2Factory.toLowerCase()
   ) {
     throw new Error("Pinned swap dependency addresses do not match the HoodiePad configuration");
   }
@@ -185,7 +213,14 @@ export async function prepareHoodiePadSwap(input: {
     publicClient: client,
     chainId: ROBINHOOD_CHAIN_ID,
   });
-  const [inputBalance, childBalance, tokenAllowance] =
+  const [
+    inputBalance,
+    childBalance,
+    tokenAllowance,
+    routerCode,
+    routerFactory,
+    routerWeth,
+  ] =
     await Promise.all([
       client.readContract({
         address: inputToken,
@@ -205,7 +240,28 @@ export async function prepareHoodiePadSwap(input: {
         functionName: "allowance",
         args: [account, swapRouter],
       }),
+      client.getCode({ address: swapRouter }),
+      client.readContract({
+        address: swapRouter,
+        abi: swapRouter02Abi,
+        functionName: "factory",
+      }),
+      client.readContract({
+        address: swapRouter,
+        abi: swapRouter02Abi,
+        functionName: "WETH9",
+      }),
     ]);
+
+  if (!routerDeploymentMatches({
+    code: routerCode,
+    factory: routerFactory,
+    weth: routerWeth,
+    expectedFactory: expectedV3Factory,
+    expectedWeth,
+  })) {
+    throw new Error("The pinned Robinhood SwapRouter02 deployment failed identity verification");
+  }
 
   if (inputBalance < amountIn) {
     throw new Error(`Insufficient ${inputSymbol} balance`);
