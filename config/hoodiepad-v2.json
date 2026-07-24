@@ -1,0 +1,100 @@
+{
+  "version": 2,
+  "marketVersion": "doppler-multicurve-v4-v2",
+  "network": {
+    "name": "Robinhood Chain",
+    "chainId": 4663,
+    "rpcUrl": "https://rpc.mainnet.chain.robinhood.com",
+    "explorerUrl": "https://robinhoodchain.blockscout.com"
+  },
+  "contracts": {
+    "hoodie": "0xC72c01AAB5f5678dc1d6f5C6d2B417d91D402Ba3",
+    "hoodieEcosystemSafe": "0xAB10Efe787DB2ef3700b94578aeC68b98e0446A7",
+    "weth": "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
+    "airlock": "0xeb7C034704eF8Dcd2D32324c1545f62fB4aD0862",
+    "dopplerERC20V1Factory": "0x1B37D3a72082029c44B35B604Ea473617580b69a",
+    "dopplerHookInitializer": "0x4e3468951D49f2EEa976eD0D6e75fFCb44a9a544",
+    "rehypeDopplerHookInitializer": "0x6f02324d20CC679d0E585290CAa6b16baCbC0F77",
+    "noOpGovernanceFactory": "0x85f37f74Ef2478A770318bc810177a9835911aD7",
+    "noOpMigrator": "0xba2F330EDb16cD8056f5988d8CE19BbC63475A0e",
+    "uniswapV4PoolManager": "0x8366a39Cc670B4001A1121b8f6A443a643E40951",
+    "uniswapV4StateView": "0x5CbD0A27C2745754F17C6D86bA5AE5d29E3Bb813",
+    "uniswapV4Quoter": "0x8dc178efb8111bb0973dd9d722ebeff267c98f94",
+    "uniswapUniversalRouter": "0x8876789976DEcBFCbbbe364623C63652Db8c0904",
+    "permit2": "0x000000000022D473030F116dDEE9F6B43aC78BA3"
+  },
+  "hoodieReferencePool": {
+    "protocol": "uniswap-v4",
+    "poolId": "0x3689064ea666e140bc2e1441118f8a3176cbd042a8e4c3abc18ca41cf9bfa3e8",
+    "poolKey": null,
+    "status": "full-pool-key-fork-verification-required"
+  },
+  "discovery": {
+    "launchStartBlock": "17600000",
+    "refreshSeconds": 15,
+    "chartLookbackBlocks": 10000,
+    "logChunkSize": 5000,
+    "publicMarketVersion": "doppler-multicurve-v4-v2"
+  },
+  "token": {
+    "template": "dopplerERC20V1",
+    "totalSupplyTokens": "1000000000",
+    "tokensToSell": "1000000000",
+    "decimals": 18,
+    "maxWalletTokens": "20000000",
+    "maxWalletDurationSeconds": 86400,
+    "controller": "0x0000000000000000000000000000000000000000",
+    "creatorAllocationTokens": "0"
+  },
+  "market": {
+    "mechanism": "doppler-multicurve-v4",
+    "curveVersion": 1,
+    "targetOpeningFdvUsd": "30000",
+    "openingFdvToleranceBps": 250,
+    "lpFee": 10000,
+    "tickSpacing": 200,
+    "dynamicFeeFlag": 8388608,
+    "migration": "noOp",
+    "governance": "noOp",
+    "requiredStatus": "Locked"
+  },
+  "fees": {
+    "wad": "1000000000000000000",
+    "creator": "800000000000000000",
+    "hoodieEcosystem": "150000000000000000",
+    "doppler": "50000000000000000"
+  },
+  "rehype": {
+    "startFee": 0,
+    "endFee": 0,
+    "durationSeconds": 0,
+    "startingTime": 0,
+    "feeRoutingMode": "routeToBeneficiaryFees",
+    "feeDistributionInfo": {
+      "assetFeesToAssetBuybackWad": "0",
+      "assetFeesToNumeraireBuybackWad": "0",
+      "assetFeesToBeneficiaryWad": "1000000000000000000",
+      "assetFeesToLpWad": "0",
+      "numeraireFeesToAssetBuybackWad": "0",
+      "numeraireFeesToNumeraireBuybackWad": "0",
+      "numeraireFeesToBeneficiaryWad": "1000000000000000000",
+      "numeraireFeesToLpWad": "0"
+    }
+  },
+  "pricing": {
+    "ethUsdPrimarySource": "coinbase",
+    "maximumSourceAgeSeconds": 60,
+    "maximumSourceDeviationBps": 200,
+    "preparedLaunchValiditySeconds": 300,
+    "maximumLaunchPriceDriftBps": 200
+  },
+  "runtimeHashSnapshot": {
+    "status": "pending-explicit-review",
+    "observedAtBlock": null,
+    "hashes": {}
+  },
+  "dependencies": {
+    "dopplerSdk": "1.0.32",
+    "dopplerRouter": "1.0.15"
+  }
+}

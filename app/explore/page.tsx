@@ -25,7 +25,7 @@ export default async function ExplorePage() {
   return (
     <AppShell>
       <section className="page-hero section-frame compact-hero">
-        <p className="eyebrow"><span /> Canonical CHILD / HOODIE markets</p>
+        <p className="eyebrow"><span /> Canonical V4 CHILD / HOODIE markets</p>
         <h1>Find your next hood.</h1>
         <p>Every market below is discovered and validated directly from Robinhood Chain.</p>
       </section>

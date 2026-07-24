@@ -8,6 +8,7 @@ import {
   getAddress,
   parseAbi,
   type Address,
+  type Hex,
 } from "viem";
 import product from "../../config/hoodiepad-v1.json";
 import {
@@ -15,6 +16,10 @@ import {
   ObjectStorageUnavailableError,
 } from "./object-storage";
 import { createRobinhoodPublicClient } from "./protocol";
+import {
+  LEGACY_V3_MARKET_VERSION,
+  type HoodiePadMarketVersion,
+} from "./market-version";
 
 const metadataKeyPattern = /^token-metadata\/[a-f0-9]{64}\.json$/;
 const artworkKeyPattern = /^token-artwork\/[a-f0-9]{64}\.(jpg|png|webp)$/;
@@ -23,7 +28,7 @@ const poolActivityAbi = parseAbi([
   "function feeGrowthGlobal1X128() view returns (uint256)",
 ]);
 
-type TokenMetadata = {
+export type TokenMetadata = {
   name?: unknown;
   symbol?: unknown;
   description?: unknown;
@@ -34,10 +39,15 @@ type TokenMetadata = {
     launchpad?: unknown;
     chain_id?: unknown;
     canonical_numeraire?: unknown;
+    market_version?: unknown;
+    curve_version?: unknown;
+    config_hash?: unknown;
+    target_opening_fdv_usd?: unknown;
   };
 };
 
 export type HoodiePadMarket = {
+  version: HoodiePadMarketVersion;
   address: Address;
   name: string;
   symbol: string;
@@ -50,7 +60,10 @@ export type HoodiePadMarket = {
   websiteUrl?: string;
   xUrl?: string;
   integrator: Address;
-  pool: Address;
+  pool: Hex;
+  poolId?: Hex;
+  initializer: Address;
+  externalHook?: Address;
   poolFee: number;
   poolLiquidity: string;
   hasSwapActivity: boolean;
@@ -65,11 +78,11 @@ export type HoodiePadMarket = {
   official: boolean;
 };
 
-function isSameAddress(first: string, second: string) {
+export function isSameAddress(first: string, second: string) {
   return first.toLowerCase() === second.toLowerCase();
 }
 
-function safeHttpUrl(value: unknown) {
+export function safeHttpUrl(value: unknown) {
   if (typeof value !== "string") return undefined;
   try {
     const parsed = new URL(value);
@@ -81,7 +94,7 @@ function safeHttpUrl(value: unknown) {
   }
 }
 
-function formatPrice(value: number) {
+export function formatPrice(value: number) {
   if (!Number.isFinite(value) || value <= 0) return "Unavailable";
   if (value < 0.000001) return value.toExponential(4);
   return new Intl.NumberFormat("en-US", {
@@ -89,7 +102,7 @@ function formatPrice(value: number) {
   }).format(value);
 }
 
-function formatCompactValue(value: number) {
+export function formatCompactValue(value: number) {
   if (!Number.isFinite(value) || value <= 0) return "Unavailable";
   return new Intl.NumberFormat("en-US", {
     notation: value >= 1_000_000 ? "compact" : "standard",
@@ -97,7 +110,7 @@ function formatCompactValue(value: number) {
   }).format(value);
 }
 
-async function readHoodiePadMetadata(tokenUri: string): Promise<TokenMetadata | null> {
+export async function readHoodiePadMetadata(tokenUri: string): Promise<TokenMetadata | null> {
   try {
     const parsed = new URL(tokenUri);
     const key = parsed.pathname === "/api/metadata"
@@ -114,7 +127,7 @@ async function readHoodiePadMetadata(tokenUri: string): Promise<TokenMetadata | 
   }
 }
 
-function metadataImageUrl(metadata: TokenMetadata | null) {
+export function metadataImageUrl(metadata: TokenMetadata | null) {
   const value = safeHttpUrl(metadata?.image);
   if (!value) return undefined;
   try {
@@ -204,6 +217,7 @@ export async function readHoodiePadMarket(
     isSameAddress(metadata.properties.canonical_numeraire, product.contracts.hoodie);
 
   return {
+    version: LEGACY_V3_MARKET_VERSION,
     address,
     name,
     symbol,
@@ -218,6 +232,7 @@ export async function readHoodiePadMarket(
     xUrl: safeHttpUrl(metadata?.properties?.x_url),
     integrator: getAddress(assetData[9]),
     pool,
+    initializer: getAddress(product.contracts.lockableV3Initializer),
     poolFee: Number(poolFee),
     poolLiquidity: poolLiquidity.toString(),
     hasSwapActivity: feeGrowthToken > 0n || feeGrowthHoodie > 0n,

@@ -1,4 +1,4 @@
-import product from "../../../config/hoodiepad-v1.json";
+import product from "../../../config/hoodiepad-v2.json";
 import { readProtocolAnalytics } from "../../lib/analytics";
 
 export const revalidate = 0;

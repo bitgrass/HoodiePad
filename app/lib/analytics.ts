@@ -1,5 +1,5 @@
 import { formatUnits } from "viem";
-import product from "../../config/hoodiepad-v1.json";
+import product from "../../config/hoodiepad-v2.json";
 import {
   readHoodiePadLaunches,
   type HoodiePadLaunch,
@@ -51,7 +51,7 @@ function formatTokenAmount(raw: bigint) {
 
 function estimatedBeneficiaryFee(feeBearingVolume: bigint, shares: string) {
   return feeBearingVolume
-    * BigInt(product.pool.fee)
+    * BigInt(product.market.lpFee)
     * BigInt(shares)
     / POOL_FEE_DENOMINATOR
     / WAD;

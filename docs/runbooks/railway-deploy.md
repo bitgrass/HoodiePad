@@ -17,7 +17,7 @@ Railway starts the resulting Vinext server with `npm run start`. The server
 reads Railway's injected `PORT` and binds to `0.0.0.0`.
 
 The checked-in `.npmrc` enables npm's legacy peer resolver because the pinned
-Doppler SDK `1.0.28` declares an optional React 18 peer while the pinned Vinext
+Doppler SDK `1.0.32` declares an optional React 18 peer while the pinned Vinext
 runtime requires React `19.2.6`. This does not change either dependency version;
 it tells clean `npm ci` installs to honor the reviewed `package-lock.json`.
 
@@ -49,9 +49,10 @@ commit an `.env` file.
 | `VINEXT_TRUST_PROXY` | `1` | No |
 | `VINEXT_TRUSTED_HOSTS` | `${{RAILWAY_PUBLIC_DOMAIN}}` | No |
 | `Alchemy_API_KEY` | The Robinhood Alchemy API key | Yes |
+| `HOODIEPAD_LAUNCH_VERSION` | `v2` | No |
 | `HOODIEPAD_EXTERNAL_REVIEW_APPROVED` | `false` until an external review is recorded | No |
-| `HOODIEPAD_OWNER_RISK_WAIVER` | `true` for the currently approved owner waiver | No |
-| `HOODIEPAD_BROADCAST_ENABLED` | `true` to return simulated MetaMask deployment calldata | No |
+| `HOODIEPAD_OWNER_RISK_WAIVER` | `false`; V2 does not accept this as external review | No |
+| `HOODIEPAD_BROADCAST_ENABLED` | `false` until every V4 gate and canary prerequisite passes | No |
 
 Do not set `PORT`; Railway injects it. Do not set `EVM_RH_PK` or any other
 private key. The production server has no signing path.
@@ -101,25 +102,22 @@ Then complete these checks:
 3. Upload a JPG, PNG, or WebP no larger than 750 KB and reload its returned
    artwork URL. HoodiePad keeps this limit below Railway's observed request
    ceiling so the platform does not reject the request before the app receives it.
-4. Complete the launch form and confirm live simulation succeeds.
-5. Check that the review gate is labeled `OWNER WAIVER`, not external review.
-6. Run the mainnet canary in `docs/runbooks/mainnet-canary.md` with a
-   human-confirmed MetaMask transaction.
-7. Confirm the launch UI changes from submitted to confirmed, then opens the
-   real `/token/<address>?tx=<hash>` page. Check that its token, pool, supply,
-   fee, lock status, and metadata match Blockscout.
-8. A newly initialized single-sided pool can be traded immediately through its
-   canonical Uniswap pool URL, but token search and DEX indexers may not list it
-   until the first swap. HoodiePad labels this state `Pool ready` and changes it
-   to `Market active` after cumulative V3 fee growth proves a swap occurred.
-9. Open `/explore` and confirm the launch appears from the live Airlock event
-   registry. The production RPC must support chunked historical `eth_getLogs`
-   requests beginning at block `17630000`.
-10. Open the token page, enter a small HOODIE amount, and confirm that the
-    in-app quote loads. For a canary wallet, complete the exact-amount ERC-20
-    approval, wait for HoodiePad to re-simulate, and then confirm the direct
-    SwapRouter02 transaction in MetaMask. Confirm the chart, recent trades,
-    holder table, volume, and FDV update after the swap is final.
+4. Open `/explore` and confirm only validated V4 markets appear. No legacy V3
+   card may appear on home, Explore, dashboard, or analytics.
+5. Open the new V4 token page and confirm its token, PoolKey, PoolId, active LP
+   fee, hook fee, supply, lock state, and metadata match Robinhood Chain.
+6. Confirm a direct historical V3 URL remains readable but is absent from all
+   public lists and aggregate analytics.
+7. Confirm the V4 chart, recent trades, holder table, volume, and FDV are
+   derived from the exact PoolManager `Swap` events for the reconstructed
+   PoolId.
+8. Run `npm run verify:robinhood:v4` and confirm it stays blocked until the
+   runtime snapshot, full reference PoolKey, and fork calibration are approved.
+9. Run `npm run verify:release`. Enabling broadcast while any V4 gate is
+   incomplete must be reported as a release blocker.
+10. Follow `docs/runbooks/v4-production-cutover.md` and then
+    `docs/runbooks/mainnet-v4-canary.md` before any V4 mainnet canary. Do not
+    reuse the V1 canary as V4 evidence.
 
 ## 5. Rollback and operations
 

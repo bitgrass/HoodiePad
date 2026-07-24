@@ -1,4 +1,8 @@
-# HoodiePad Robinhood mainnet canary
+# HoodiePad V1 Robinhood mainnet canary (legacy)
+
+This runbook is retained only for historical V1 auditability. It must not be
+used to authorize a new launch. All new mainnet launches use
+`mainnet-v4-canary.md`; an owner waiver is not accepted for V2.
 
 This runbook enables one human-confirmed canary launch. It never authorizes a
 server-held signer or automated mainnet broadcast.

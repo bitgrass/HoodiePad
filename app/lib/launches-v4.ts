@@ -1,5 +1,6 @@
 import {
   airlockAbi,
+  dopplerERC20V1Abi,
 } from "@whetstone-research/doppler-sdk/evm";
 import {
   formatUnits,
@@ -8,79 +9,28 @@ import {
   type Address,
   type Hex,
 } from "viem";
-import product from "../../config/hoodiepad-v1.json";
+import product from "../../config/hoodiepad-v2.json";
+import type {
+  HoodiePadLaunch,
+  MarketAnalytics,
+  MarketHolder,
+  MarketSwapPoint,
+} from "./launches";
 import {
-  readHoodiePadMarket,
-  type HoodiePadMarket,
-} from "./market";
+  readHoodiePadV4Market,
+  v4PriceForMarket,
+  type HoodiePadV4Market,
+} from "./market-v4";
 import { createRobinhoodPublicClient } from "./protocol";
+import { formatRational } from "./v4-price";
 
 type RobinhoodClient = ReturnType<typeof createRobinhoodPublicClient>;
-
-export type MarketSwapPoint = {
-  blockNumber: string;
-  transactionHash: Hex;
-  logIndex: number;
-  timestamp: number;
-  side: "buy" | "sell";
-  trader: Address;
-  price: number;
-  hoodieVolumeRaw: string;
-  hoodieFeeVolumeRaw: string;
-  childVolumeRaw: string;
-};
-
-export type MarketHolder = {
-  address: Address;
-  balanceRaw: string;
-  balance: string;
-  sharePercent: number;
-};
-
-export type MarketDailyActivity = {
-  date: string;
-  swaps: number;
-  hoodieVolumeRaw: string;
-  hoodieFeeVolumeRaw: string;
-};
-
-export type MarketAnalytics = {
-  points: MarketSwapPoint[];
-  swapCount: number;
-  swapCount24h: number;
-  hoodieVolumeRaw: string;
-  hoodieVolume24hRaw: string;
-  hoodieFeeVolumeRaw: string;
-  hoodieFeeVolume24hRaw: string;
-  hoodieVolume: string;
-  hoodieVolume24h: string;
-  changePercent: number | null;
-  holderCount: number;
-  holders: MarketHolder[];
-  daily: MarketDailyActivity[];
-};
-
-export type HoodiePadLaunch = HoodiePadMarket & {
+type HoodiePadV4Launch = HoodiePadV4Market & {
   creator: Address;
   launchBlock: string;
   launchTimestamp: number;
   launchTransactionHash: Hex;
   analytics: MarketAnalytics;
-};
-
-export type HoodiePadMarketSummary = {
-  address: string;
-  symbol: string;
-  name: string;
-  creator: string;
-  price: string;
-  fdv: string;
-  volume: string;
-  change: string;
-  imageUrl?: string;
-  active: boolean;
-  launchBlock: string;
-  tone: "green" | "peach" | "blue" | "violet";
 };
 
 type DecodedChainEvent = {
@@ -90,8 +40,8 @@ type DecodedChainEvent = {
   logIndex: number | null;
 };
 
-const v3SwapEvent = parseAbiItem(
-  "event Swap(address indexed sender,address indexed recipient,int256 amount0,int256 amount1,uint160 sqrtPriceX96,uint128 liquidity,int24 tick)",
+const v4SwapEvent = parseAbiItem(
+  "event Swap(bytes32 indexed id,address indexed sender,int128 amount0,int128 amount1,uint160 sqrtPriceX96,uint128 liquidity,int24 tick,uint24 fee)",
 );
 const erc20TransferEvent = parseAbiItem(
   "event Transfer(address indexed from,address indexed to,uint256 value)",
@@ -99,7 +49,8 @@ const erc20TransferEvent = parseAbiItem(
 const zeroAddress = "0x0000000000000000000000000000000000000000";
 const launchStartBlock = BigInt(product.discovery.launchStartBlock);
 const logChunkSize = BigInt(product.discovery.logChunkSize);
-let cachedLaunches:
+
+let cachedV4Launches:
   | { expiresAt: number; promise: Promise<HoodiePadLaunch[]> }
   | undefined;
 
@@ -119,12 +70,8 @@ function compactAmount(raw: bigint, decimals = 18) {
 async function readEventChunks(
   client: RobinhoodClient,
   input: {
-    address: Address;
-    abi: typeof airlockAbi;
-    eventName: "Create";
     fromBlock: bigint;
     toBlock: bigint;
-    args?: Record<string, Address>;
   },
 ) {
   const events: DecodedChainEvent[] = [];
@@ -138,10 +85,10 @@ async function readEventChunks(
         ? fromBlock + logChunkSize - 1n
         : input.toBlock;
     const chunk = await client.getContractEvents({
-      address: input.address,
-      abi: input.abi,
-      eventName: input.eventName,
-      args: input.args,
+      address: getAddress(product.contracts.airlock),
+      abi: airlockAbi,
+      eventName: "Create",
+      args: { numeraire: getAddress(product.contracts.hoodie) },
       fromBlock,
       toBlock,
     } as Parameters<RobinhoodClient["getContractEvents"]>[0]);
@@ -150,30 +97,55 @@ async function readEventChunks(
   return events;
 }
 
-async function readLogChunks(
+async function readV4SwapChunks(
   client: RobinhoodClient,
-  input: {
-    address: Address;
-    event: typeof v3SwapEvent | typeof erc20TransferEvent;
-    fromBlock: bigint;
-    toBlock: bigint;
-  },
+  poolId: Hex,
+  fromBlock: bigint,
+  toBlock: bigint,
 ) {
   const events: DecodedChainEvent[] = [];
   for (
-    let fromBlock = input.fromBlock;
-    fromBlock <= input.toBlock;
-    fromBlock += logChunkSize
+    let cursor = fromBlock;
+    cursor <= toBlock;
+    cursor += logChunkSize
   ) {
-    const toBlock =
-      fromBlock + logChunkSize - 1n < input.toBlock
-        ? fromBlock + logChunkSize - 1n
-        : input.toBlock;
+    const chunkEnd =
+      cursor + logChunkSize - 1n < toBlock
+        ? cursor + logChunkSize - 1n
+        : toBlock;
     const chunk = await client.getLogs({
-      address: input.address,
-      event: input.event,
-      fromBlock,
-      toBlock,
+      address: getAddress(product.contracts.uniswapV4PoolManager),
+      event: v4SwapEvent,
+      args: { id: poolId },
+      fromBlock: cursor,
+      toBlock: chunkEnd,
+    } as Parameters<RobinhoodClient["getLogs"]>[0]);
+    events.push(...chunk as unknown as DecodedChainEvent[]);
+  }
+  return events;
+}
+
+async function readTransferChunks(
+  client: RobinhoodClient,
+  token: Address,
+  fromBlock: bigint,
+  toBlock: bigint,
+) {
+  const events: DecodedChainEvent[] = [];
+  for (
+    let cursor = fromBlock;
+    cursor <= toBlock;
+    cursor += logChunkSize
+  ) {
+    const chunkEnd =
+      cursor + logChunkSize - 1n < toBlock
+        ? cursor + logChunkSize - 1n
+        : toBlock;
+    const chunk = await client.getLogs({
+      address: token,
+      event: erc20TransferEvent,
+      fromBlock: cursor,
+      toBlock: chunkEnd,
     } as Parameters<RobinhoodClient["getLogs"]>[0]);
     events.push(...chunk as unknown as DecodedChainEvent[]);
   }
@@ -189,18 +161,18 @@ function formatHolderBalance(raw: bigint, decimals: number) {
   }).format(value);
 }
 
-async function readMarketHolders(
-  market: Pick<HoodiePadMarket, "address" | "pool" | "decimals" | "totalSupplyRaw">,
+async function readV4Holders(
+  market: HoodiePadV4Market,
   client: RobinhoodClient,
   fromBlock: bigint,
   toBlock: bigint,
 ) {
-  const logs = await readLogChunks(client, {
-    address: market.address,
-    event: erc20TransferEvent,
+  const logs = await readTransferChunks(
+    client,
+    market.address,
     fromBlock,
     toBlock,
-  });
+  );
   const balances = new Map<string, bigint>();
   const checksumAddresses = new Map<string, Address>();
   for (const log of logs) {
@@ -224,81 +196,97 @@ async function readMarketHolders(
 
   const excluded = new Set([
     zeroAddress,
-    market.pool.toLowerCase(),
+    product.contracts.uniswapV4PoolManager.toLowerCase(),
     product.contracts.airlock.toLowerCase(),
-    product.contracts.lockableV3Initializer.toLowerCase(),
+    product.contracts.dopplerHookInitializer.toLowerCase(),
+    product.contracts.rehypeDopplerHookInitializer.toLowerCase(),
+    market.externalHook.toLowerCase(),
     product.contracts.noOpMigrator.toLowerCase(),
-    product.pool.noOpMigrationPool.toLowerCase(),
+    product.contracts.noOpGovernanceFactory.toLowerCase(),
   ]);
   const totalSupply = BigInt(market.totalSupplyRaw);
   const walletBalances = [...balances.entries()]
     .filter(([address, balance]) => balance > 0n && !excluded.has(address))
-    .sort(([, first], [, second]) => first === second ? 0 : first > second ? -1 : 1);
-
-  return {
-    holderCount: walletBalances.length,
-    holders: walletBalances.slice(0, 20).map(([address, balance]) => ({
+    .sort(([, first], [, second]) =>
+      first === second ? 0 : first > second ? -1 : 1,
+    );
+  const holders: MarketHolder[] = walletBalances.slice(0, 20).map(
+    ([address, balance]) => ({
       address: checksumAddresses.get(address) ?? getAddress(address),
       balanceRaw: balance.toString(),
       balance: formatHolderBalance(balance, market.decimals),
       sharePercent: totalSupply > 0n
         ? Number(balance * 1_000_000n / totalSupply) / 10_000
         : 0,
-    })),
-  };
+    }),
+  );
+  return { holderCount: walletBalances.length, holders };
 }
 
-export async function readMarketAnalytics(
-  market: Pick<
-    HoodiePadMarket,
-    "address" | "pool" | "decimals" | "hoodiePerToken" | "totalSupplyRaw"
-  >,
+export async function readV4MarketAnalytics(
+  market: HoodiePadV4Market,
   client = createRobinhoodPublicClient(),
   fromBlock = launchStartBlock,
 ): Promise<MarketAnalytics> {
   const latestBlock = await client.getBlockNumber();
   const [logs, holderData] = await Promise.all([
-    readLogChunks(client, {
-      address: market.pool,
-      event: v3SwapEvent,
-      fromBlock,
-      toBlock: latestBlock,
-    }),
-    readMarketHolders(market, client, fromBlock, latestBlock),
+    readV4SwapChunks(client, market.poolId, fromBlock, latestBlock),
+    readV4Holders(market, client, fromBlock, latestBlock),
   ]);
 
-  const decodedPoints = logs
-    .map((log) => {
-      const args = log.args as {
-        amount0?: bigint;
-        amount1?: bigint;
-        tick?: number;
-        recipient?: Address;
-      };
-      if (
-        log.blockNumber === null ||
-        !log.transactionHash ||
-        args.amount0 === undefined ||
-        args.amount1 === undefined ||
-        args.tick === undefined ||
-        !args.recipient
-      ) {
-        return null;
-      }
-      return {
-        blockNumber: log.blockNumber.toString(),
-        transactionHash: log.transactionHash,
-        logIndex: log.logIndex ?? 0,
-        timestamp: 0,
-        side: args.amount0 < 0n ? "buy" : "sell",
-        trader: getAddress(args.recipient),
-        price: Math.pow(1.0001, Number(args.tick)),
-        hoodieVolumeRaw: absolute(args.amount1).toString(),
-        hoodieFeeVolumeRaw: args.amount1 > 0n ? args.amount1.toString() : "0",
-        childVolumeRaw: absolute(args.amount0).toString(),
-      } satisfies MarketSwapPoint;
-    })
-    .filter((point): point is MarketSwapPoint => point !== null)
+  const transactionHashes = [...new Set(
+    logs
+      .map((log) => log.transactionHash)
+      .filter((hash): hash is Hex => hash !== null),
+  )];
+  const transactions = new Map<Hex, Address>();
+  await Promise.all(transactionHashes.map(async (hash) => {
+    const transaction = await client.getTransaction({ hash });
+    transactions.set(hash, getAddress(transaction.from));
+  }));
+
+  const childIsCurrency0 =
+    market.poolKey.currency0.toLowerCase() === market.address.toLowerCase();
+  const decodedPoints = logs.map((log) => {
+    const args = log.args as {
+      amount0?: bigint;
+      amount1?: bigint;
+      sqrtPriceX96?: bigint;
+      tick?: number;
+    };
+    if (
+      log.blockNumber === null ||
+      !log.transactionHash ||
+      args.amount0 === undefined ||
+      args.amount1 === undefined ||
+      args.sqrtPriceX96 === undefined ||
+      args.tick === undefined
+    ) {
+      return null;
+    }
+    const childDelta = childIsCurrency0 ? args.amount0 : args.amount1;
+    const hoodieDelta = childIsCurrency0 ? args.amount1 : args.amount0;
+    const price = v4PriceForMarket(
+      market.poolKey,
+      args.sqrtPriceX96,
+      market.address,
+      market.decimals,
+    );
+    return {
+      blockNumber: log.blockNumber.toString(),
+      transactionHash: log.transactionHash,
+      logIndex: log.logIndex ?? 0,
+      timestamp: 0,
+      side: childDelta < 0n ? "buy" : "sell",
+      trader:
+        transactions.get(log.transactionHash) ??
+        getAddress(zeroAddress),
+      price: Number(formatRational(price, 18)),
+      hoodieVolumeRaw: absolute(hoodieDelta).toString(),
+      hoodieFeeVolumeRaw: hoodieDelta > 0n ? hoodieDelta.toString() : "0",
+      childVolumeRaw: absolute(childDelta).toString(),
+    } satisfies MarketSwapPoint;
+  }).filter((point): point is MarketSwapPoint => point !== null)
     .sort((first, second) => {
       const blockDifference =
         BigInt(first.blockNumber) - BigInt(second.blockNumber);
@@ -307,7 +295,9 @@ export async function readMarketAnalytics(
         : blockDifference < 0n ? -1 : 1;
     });
 
-  const uniqueBlocks = [...new Set(decodedPoints.map((point) => point.blockNumber))];
+  const uniqueBlocks = [...new Set(
+    decodedPoints.map((point) => point.blockNumber),
+  )];
   const timestamps = new Map<string, number>();
   await Promise.all(uniqueBlocks.map(async (blockNumber) => {
     const block = await client.getBlock({ blockNumber: BigInt(blockNumber) });
@@ -326,11 +316,7 @@ export async function readMarketAnalytics(
     (total, point) => total + BigInt(point.hoodieFeeVolumeRaw),
     0n,
   );
-  const latestTimestamp = Math.max(
-    Math.floor(Date.now() / 1000),
-    ...points.map((point) => point.timestamp),
-  );
-  const cutoff24h = latestTimestamp - 24 * 60 * 60;
+  const cutoff24h = Math.floor(Date.now() / 1000) - 24 * 60 * 60;
   const points24h = points.filter((point) => point.timestamp >= cutoff24h);
   const hoodieVolume24hRaw = points24h.reduce(
     (total, point) => total + BigInt(point.hoodieVolumeRaw),
@@ -340,6 +326,7 @@ export async function readMarketAnalytics(
     (total, point) => total + BigInt(point.hoodieFeeVolumeRaw),
     0n,
   );
+
   const dailyActivity = new Map<string, {
     swaps: number;
     hoodieVolumeRaw: bigint;
@@ -392,109 +379,108 @@ export async function readMarketAnalytics(
   };
 }
 
-async function loadHoodiePadLaunches(
+async function loadV4Launches(
   client = createRobinhoodPublicClient(),
 ): Promise<HoodiePadLaunch[]> {
   const latestBlock = await client.getBlockNumber();
   const logs = await readEventChunks(client, {
-    address: getAddress(product.contracts.airlock),
-    abi: airlockAbi,
-    eventName: "Create",
-    args: { numeraire: getAddress(product.contracts.hoodie) },
     fromBlock: launchStartBlock,
     toBlock: latestBlock,
   });
 
-  const candidates = await Promise.allSettled(
-    logs.map(async (log) => {
-      const args = log.args as {
-        asset?: Address;
-        numeraire?: Address;
-        poolOrHook?: Address;
-      };
-      if (
-        !args.asset ||
-        !args.numeraire ||
-        !args.poolOrHook ||
-        log.blockNumber === null ||
-        !log.transactionHash
-      ) {
-        throw new Error("Incomplete Airlock Create event");
-      }
-      const [market, receipt, launchBlock] = await Promise.all([
-        readHoodiePadMarket(args.asset, client),
-        client.getTransactionReceipt({ hash: log.transactionHash }),
-        client.getBlock({ blockNumber: log.blockNumber }),
-      ]);
-      if (!market.official || market.pool.toLowerCase() !== args.poolOrHook.toLowerCase()) {
-        throw new Error("Create event is not an official HoodiePad market");
-      }
-      const analytics = await readMarketAnalytics(market, client, log.blockNumber);
-      return {
-        ...market,
-        creator: getAddress(receipt.from),
-        launchBlock: log.blockNumber.toString(),
-        launchTimestamp: Number(launchBlock.timestamp),
-        launchTransactionHash: log.transactionHash,
-        analytics,
-      } satisfies HoodiePadLaunch;
-    }),
-  );
+  const candidates = await Promise.allSettled(logs.map(async (log) => {
+    const args = log.args as {
+      asset?: Address;
+      initializer?: Address;
+    };
+    if (
+      !args.asset ||
+      !args.initializer ||
+      log.blockNumber === null ||
+      !log.transactionHash ||
+      args.initializer.toLowerCase() !==
+        product.contracts.dopplerHookInitializer.toLowerCase()
+    ) {
+      throw new Error("Airlock Create event is not a HoodiePad V2 candidate");
+    }
+    const [market, receipt, launchBlock] = await Promise.all([
+      readHoodiePadV4Market(args.asset, client),
+      client.getTransactionReceipt({ hash: log.transactionHash }),
+      client.getBlock({ blockNumber: log.blockNumber }),
+    ]);
+    if (!market.official) {
+      throw new Error(
+        `V4 launch failed HoodiePad V2 invariant validation: ${market.validationErrors.join(", ")}`,
+      );
+    }
+    const analytics = await readV4MarketAnalytics(
+      market,
+      client,
+      log.blockNumber,
+    );
+    return {
+      ...market,
+      hasSwapActivity: analytics.swapCount > 0,
+      creator: getAddress(receipt.from),
+      launchBlock: log.blockNumber.toString(),
+      launchTimestamp: Number(launchBlock.timestamp),
+      launchTransactionHash: log.transactionHash,
+      analytics,
+    } satisfies HoodiePadV4Launch;
+  }));
+
+  candidates.forEach((candidate, index) => {
+    if (candidate.status !== "rejected") return;
+    const args = logs[index]?.args as { asset?: Address } | undefined;
+    const asset = args?.asset ?? "unknown";
+    const reason = candidate.reason instanceof Error
+      ? candidate.reason.message.split("\n")[0]
+      : "Unknown V4 registry validation error";
+    console.warn(
+      `[HoodiePad V4 registry] Rejected ${asset}: ${reason}`,
+    );
+  });
 
   return candidates
-    .filter(
-      (candidate): candidate is PromiseFulfilledResult<HoodiePadLaunch> =>
-        candidate.status === "fulfilled",
-    )
+    .filter((candidate) => candidate.status === "fulfilled")
     .map((candidate) => candidate.value)
     .sort((first, second) =>
       BigInt(first.launchBlock) > BigInt(second.launchBlock) ? -1 : 1,
     );
 }
 
-export function readLegacyHoodiePadLaunches() {
+export function readHoodiePadV4Launches() {
   const now = Date.now();
-  if (cachedLaunches && cachedLaunches.expiresAt > now) {
-    return cachedLaunches.promise;
+  if (cachedV4Launches && cachedV4Launches.expiresAt > now) {
+    return cachedV4Launches.promise;
   }
-  const promise = loadHoodiePadLaunches().catch((error) => {
-    cachedLaunches = undefined;
+  const promise = loadV4Launches().catch((error) => {
+    cachedV4Launches = undefined;
     throw error;
   });
-  cachedLaunches = {
+  cachedV4Launches = {
     expiresAt: now + product.discovery.refreshSeconds * 1000,
     promise,
   };
   return promise;
 }
 
-export async function readHoodiePadLaunches() {
-  const { readHoodiePadV4Launches } = await import("./launches-v4");
-  return readHoodiePadV4Launches();
+export async function readHoodiePadV4Launch(
+  address: Address,
+  client?: RobinhoodClient,
+) {
+  const launches = client
+    ? await loadV4Launches(client)
+    : await readHoodiePadV4Launches();
+  return launches.find(
+    (launch) => launch.address.toLowerCase() === address.toLowerCase(),
+  );
 }
 
-export function formatMarketChange(changePercent: number | null) {
-  if (changePercent === null || !Number.isFinite(changePercent)) return "New";
-  const prefix = changePercent > 0 ? "+" : "";
-  return `${prefix}${changePercent.toFixed(2)}%`;
-}
-
-export function summarizeHoodiePadLaunches(
-  launches: HoodiePadLaunch[],
-): HoodiePadMarketSummary[] {
-  const tones: HoodiePadMarketSummary["tone"][] = ["green", "peach", "blue", "violet"];
-  return launches.map((market, index) => ({
-    address: market.address,
-    symbol: market.symbol,
-    name: market.name,
-    creator: market.creator,
-    price: market.hoodiePerToken,
-    fdv: `${market.fdvHoodie} HOODIE`,
-    volume: `${market.analytics.hoodieVolume} HOODIE`,
-    change: formatMarketChange(market.analytics.changePercent),
-    imageUrl: market.imageUrl,
-    active: market.hasSwapActivity,
-    launchBlock: market.launchBlock,
-    tone: tones[index % tones.length],
-  }));
+export async function readV4TokenSupply(address: Address) {
+  return createRobinhoodPublicClient().readContract({
+    address,
+    abi: dopplerERC20V1Abi,
+    functionName: "totalSupply",
+  });
 }

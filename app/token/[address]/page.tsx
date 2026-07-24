@@ -1,10 +1,13 @@
 import Link from "next/link";
-import product from "../../../config/hoodiepad-v1.json";
+import { getAddress } from "viem";
+import product from "../../../config/hoodiepad-v2.json";
 import { AppShell } from "../../components/AppShell";
 import { MarketActivity } from "../../components/MarketActivity";
 import { MarketChart } from "../../components/MarketChart";
 import { SwapPanel } from "../../components/SwapPanel";
-import { readHoodiePadMarket, type HoodiePadMarket } from "../../lib/market";
+import { type HoodiePadMarket } from "../../lib/market";
+import { readVersionedHoodiePadMarket } from "../../lib/market-v4";
+import { PUBLIC_V4_MARKET_VERSION } from "../../lib/market-version";
 
 export const revalidate = 0;
 
@@ -47,7 +50,12 @@ export default async function TokenPage({
   const [{ address }, query] = await Promise.all([params, searchParams]);
   let market: HoodiePadMarket;
   try {
-    market = await readHoodiePadMarket(address);
+    market = await readVersionedHoodiePadMarket(address);
+    if (market.version === PUBLIC_V4_MARKET_VERSION) {
+      const { readHoodiePadV4Launch } = await import("../../lib/launches-v4");
+      const indexedMarket = await readHoodiePadV4Launch(getAddress(address));
+      if (indexedMarket) market = indexedMarket;
+    }
   } catch (error) {
     const missingContract =
       error instanceof Error && error.message === "No token contract exists at this address";
@@ -66,7 +74,10 @@ export default async function TokenPage({
       ? query.tx
       : "";
   const explorerToken = `${product.network.explorerUrl}/token/${market.address}`;
-  const explorerPool = `${product.network.explorerUrl}/address/${market.pool}`;
+  const isV4 = market.version === PUBLIC_V4_MARKET_VERSION;
+  const explorerPool = isV4
+    ? `${product.network.explorerUrl}/search?q=${market.pool}`
+    : `${product.network.explorerUrl}/address/${market.pool}`;
   const uniswapPool = `https://app.uniswap.org/explore/pools/robinhood/${market.pool}`;
 
   return (
@@ -152,7 +163,7 @@ export default async function TokenPage({
           <MarketChart token={market.address} initialPrice={market.hoodiePerToken} />
           <div className="chart-pool-links">
             <a href={explorerPool} target="_blank" rel="noreferrer">
-              Pool {shorten(market.pool)} ↗
+              {isV4 ? "Pool ID" : "Pool"} {shorten(market.pool)} ↗
             </a>
             <span>Live Swap events · Robinhood Chain</span>
           </div>
@@ -164,7 +175,12 @@ export default async function TokenPage({
           </div>
         </div>
 
-        <SwapPanel token={market.address} symbol={market.symbol} poolUrl={uniswapPool} />
+        <SwapPanel
+          token={market.address}
+          symbol={market.symbol}
+          poolUrl={uniswapPool}
+          marketVersion={market.version}
+        />
       </section>
 
       <MarketActivity token={market.address} symbol={market.symbol} />

@@ -1,8 +1,19 @@
-# HoodiePad V1 product decisions
+# HoodiePad versioned product decisions
 
-This file is authoritative for HoodiePad V1. Changes to a frozen value require a new ADR and fresh Robinhood fork tests.
+This file is authoritative for HoodiePad. Changes to a frozen value require a
+new ADR and fresh Robinhood fork tests.
 
-## Product
+## Public market policy
+
+- Public Explore, analytics, dashboard, and home discovery show only validated
+  `doppler-multicurve-v4-v2` markets during the staged V2 rollout.
+- Legacy V1 readers remain in the codebase for direct historical pages,
+  regression tests, rollback, and auditability.
+- HoodiePad never creates another V1 market after V2 activation.
+- The V2 launch path remains read-only until its separate V4 calibration
+  report, runtime-hash snapshot, pricing checks, swaps, and fee claims pass.
+
+## HoodiePad V1 (legacy)
 
 | Decision | V1 value |
 | --- | --- |
@@ -45,24 +56,54 @@ This file is authoritative for HoodiePad V1. Changes to a frozen value require a
 | In-app trading | Exact-input canonical V3 quote, exact-amount ERC-20 approval, direct official `SwapRouter02` execution, connected MetaMask confirmation |
 | Base | Out of scope |
 
+## HoodiePad V2 (new launches)
+
+| Decision | V2 value |
+| --- | --- |
+| Market version | `doppler-multicurve-v4-v2` |
+| Network | Robinhood Chain mainnet, chain ID `4663` |
+| Canonical quote | HOODIE, `0xC72c01AAB5f5678dc1d6f5C6d2B417d91D402Ba3` |
+| Launch mechanism | Canonical Doppler V4 Multicurve through `DopplerHookInitializer` |
+| Curve | `HOODIE_CURVE_V1` from `config/hoodie-v4-curve-v1.json` |
+| Target opening FDV | Exactly `$30,000`, accepted within `2.5%` after initialization |
+| Supply | Exactly 1,000,000,000 tokens; 100% on the market |
+| Creator token allocation | 0 |
+| Vesting / presale / airdrop / dev buy | None |
+| V4 active LP fee | 1% (`10000`) |
+| Rehype hook fee | 0 |
+| LP-fee beneficiaries | Creator 80%, ecosystem Safe 15%, live Airlock owner 5% |
+| Maximum wallet | 20,000,000 tokens for exactly 86,400 seconds |
+| Controller | Zero address |
+| Migration / governance | NoOp / NoOp; locked market |
+| New-launch dependency | Exact Doppler SDK `1.0.32` |
+| Public discovery | V4-only after V2 activation |
+
+The V2 runtime-hash snapshot and calibration file deliberately start
+unapproved. Values are filled only from an explicitly reviewed current
+Robinhood fork report.
+
 ## Required launch blockers
 
 Mainnet broadcasting stays disabled until all of these are true:
 
-1. The locked V3 tick range has passed buy, sell, fee-claim, max-wallet, and token-ordering tests on a current Robinhood fork.
-2. Every canonical Doppler dependency has non-empty bytecode and the expected runtime hash.
-3. The live Airlock owner resolves to the 5% beneficiary used by the launch.
-4. An external reviewer signs off on the launch adapter and operational runbook,
-   or the owner records an explicit risk waiver while keeping that missing review
-   visible in release output.
+1. The exact V4 SDK and any router dependency are locked to their reviewed versions.
+2. Every canonical Doppler and Uniswap V4 dependency has non-empty bytecode and
+   an explicitly reviewed runtime hash.
+3. The complete HOODIE/WETH V4 PoolKey recomputes to the pinned reference PoolId.
+4. The V4 launch, direct and multihop swaps, slippage protection, max-wallet
+   lifecycle, holder accounting, fee accrual, and 80/15/5 claims pass on a
+   current disposable Robinhood fork.
+5. The live Airlock owner resolves to the 5% beneficiary used by the launch.
+6. An independent external reviewer signs off on the V2 launch adapter and
+   operational runbook. An owner waiver is not sufficient for V2.
 
 ## Runtime hash snapshot
 
-The first successful read-only Robinhood `Airlock.create` simulation observed
-and recorded the canonical dependency runtime hashes at block `17157669`.
-Every later preparation and simulation must match that approved snapshot
-exactly. Any missing bytecode or hash change blocks simulation and mainnet
-broadcast until a reviewed ADR updates the snapshot.
+The legacy V1 snapshot remains evidence for V1 only. V2 has a separate,
+initially unapproved snapshot in `config/hoodiepad-v2.json`. Every V2
+preparation and simulation must match the reviewed V4 snapshot exactly. Any
+missing bytecode or hash change blocks simulation and mainnet broadcast until
+a reviewed ADR updates the snapshot.
 
 ## User promise
 

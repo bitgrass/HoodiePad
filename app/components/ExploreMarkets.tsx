@@ -56,14 +56,14 @@ export function ExploreMarkets({ markets: initialMarkets }: { markets: MarketCar
         ) : (
           <div className="live-empty-state">
             <strong>No matching HoodiePad markets.</strong>
-            <p>Only validated launches emitted by the canonical Airlock appear here.</p>
+            <p>Only validated Multicurve V4 launches emitted by the canonical Airlock appear here.</p>
           </div>
         )}
         <div className="empty-state-row">
           <span>Live registry</span>
           <p>
             {markets.length} validated HoodiePad {markets.length === 1 ? "market" : "markets"} found
-            from Robinhood Chain launch events.
+            from Robinhood Chain V4 launch events.
           </p>
         </div>
       </section>

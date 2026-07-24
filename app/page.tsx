@@ -83,7 +83,7 @@ export default async function Home() {
         ) : (
           <div className="live-empty-state">
             <strong>No validated HoodiePad launches found yet.</strong>
-            <p>Markets appear here automatically after their Airlock launch confirms.</p>
+            <p>Validated V4 markets appear here automatically after their Airlock launch confirms.</p>
           </div>
         )}
       </section>
@@ -110,7 +110,7 @@ export default async function Home() {
             <span className="step-number">02</span>
             <div className="step-icon">↗</div>
             <h3>Open the market</h3>
-            <p>One transaction creates the 1B supply and locked CHILD/HOODIE pool.</p>
+            <p>One transaction creates the 1B supply and locked V4 CHILD/HOODIE pool.</p>
           </article>
           <article>
             <span className="step-number">03</span>

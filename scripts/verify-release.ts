@@ -1,61 +1,84 @@
-import type { Address } from "viem";
+import product from "../config/hoodiepad-v2.json";
 import {
-  getCalibrationConfigHash,
-  getCalibrationReport,
-  isCalibrationReportApproved,
-} from "../app/lib/calibration";
-import { readChainStatus, simulateLaunch } from "../app/lib/protocol";
+  getV4CalibrationConfigHash,
+  getV4CalibrationReport,
+  isV4CalibrationApproved,
+} from "../app/lib/v4-calibration";
+import {
+  DECLARED_DOPPLER_SDK_VERSION,
+  isExactV4SdkInstalled,
+  isV4RuntimeSnapshotApproved,
+} from "../app/lib/v4-policy";
 import { getReleasePolicy } from "../app/lib/release-policy";
 
-const DEFAULT_CREATOR = "0x1111111111111111111111111111111111111111";
-const creator = (
-  process.env.HOODIEPAD_SIMULATION_CREATOR?.trim() || DEFAULT_CREATOR
-) as Address;
-
 function line(label: string, value: unknown) {
-  process.stdout.write(`${label.padEnd(24)} ${String(value)}\n`);
+  process.stdout.write(`${label.padEnd(28)} ${String(value)}\n`);
 }
 
-const report = getCalibrationReport();
-const calibrationApproved = isCalibrationReportApproved(report);
+const report = getV4CalibrationReport();
+const calibrationApproved = isV4CalibrationApproved(report);
+const runtimeApproved = isV4RuntimeSnapshotApproved();
+const exactSdk = isExactV4SdkInstalled();
+const poolKeyPinned = product.hoodieReferencePool.poolKey !== null;
 const releasePolicy = getReleasePolicy();
+const launchVersion =
+  process.env.HOODIEPAD_LAUNCH_VERSION?.trim().toLowerCase();
+const versionConfigured = launchVersion === "v2";
 
-line("Mode", "READ-ONLY RELEASE CHECK");
+const v4ApprovalGatesPassed =
+  calibrationApproved &&
+  runtimeApproved &&
+  exactSdk &&
+  poolKeyPinned &&
+  releasePolicy.externalReviewApproved &&
+  versionConfigured;
+
+line("Mode", "READ-ONLY V4 RELEASE CHECK");
+line("Market version", product.marketVersion);
+line("Launch version", versionConfigured ? "V2" : "NOT V2");
+line("Required Doppler SDK", product.dependencies.dopplerSdk);
+line("Declared Doppler SDK", DECLARED_DOPPLER_SDK_VERSION);
+line("Runtime snapshot", runtimeApproved ? "APPROVED" : "NOT APPROVED");
+line("Reference PoolKey", poolKeyPinned ? "PINNED" : "MISSING");
 line("Calibration", calibrationApproved ? "PASSED" : report.status.toUpperCase());
-line("Calibration block", report.forkBlock ?? "not recorded");
-line("Calibration config", report.configHash === getCalibrationConfigHash() ? "MATCH" : "MISMATCH");
-line("Review gate", releasePolicy.reviewGateLabel);
-line("Deployment policy", releasePolicy.broadcastEnabled ? "ENABLED" : "DISABLED");
-
-const chainStatus = await readChainStatus();
-line("Robinhood RPC", chainStatus.available ? "CONNECTED" : "UNAVAILABLE");
-const dependenciesApproved =
-  chainStatus.available &&
-  Object.values(chainStatus.dependencies ?? {}).every((dependency) =>
-    dependency.matchesExpectedHash);
-line("Dependency snapshot", dependenciesApproved ? "VERIFIED" : "FAILED");
-
-const simulation = chainStatus.available
-  ? await simulateLaunch({
-      name: "HoodiePad Release Check",
-      symbol: "HPREL",
-      tokenURI: "https://hoodie.fun/hoodiepad-release-check.json",
-      creator,
-      chainStatus,
-    })
-  : { status: "unavailable" as const, error: chainStatus.error };
-line("Launch simulation", simulation.status.toUpperCase());
-if (simulation.status !== "simulated") line("Simulation reason", simulation.error ?? "unknown");
+line(
+  "Calibration config",
+  report.configHash === getV4CalibrationConfigHash() ? "MATCH" : "MISMATCH",
+);
+line(
+  "External review",
+  releasePolicy.externalReviewApproved ? "APPROVED" : "NOT APPROVED",
+);
+line(
+  "Deployment policy",
+  releasePolicy.broadcastEnabled ? "ENABLED" : "DISABLED",
+);
 
 const blockers = [
-  ...(!calibrationApproved ? ["Robinhood fork calibration has not passed."] : []),
-  ...(!releasePolicy.reviewGateApproved
-    ? ["External review approval or an owner risk waiver is missing."]
+  ...(!versionConfigured
+    ? ["HOODIEPAD_LAUNCH_VERSION must be v2; legacy V3 creation is disabled."]
     : []),
-  ...(!releasePolicy.broadcastEnabled ? ["Mainnet deployment policy is disabled."] : []),
-  ...(!chainStatus.available ? ["Robinhood RPC is unavailable."] : []),
-  ...(!dependenciesApproved ? ["A runtime dependency hash is unverified."] : []),
-  ...(simulation.status !== "simulated" ? ["The exact launch transaction did not simulate."] : []),
+  ...(!exactSdk
+    ? [`Exact Doppler SDK ${product.dependencies.dopplerSdk} is not locked.`]
+    : []),
+  ...(!runtimeApproved
+    ? ["The reviewed V4 runtime bytecode snapshot is not approved."]
+    : []),
+  ...(!poolKeyPinned
+    ? ["The complete HOODIE/WETH V4 PoolKey is not pinned."]
+    : []),
+  ...(!calibrationApproved
+    ? ["The complete Robinhood V4 fork calibration has not passed."]
+    : []),
+  ...(!releasePolicy.externalReviewApproved
+    ? ["Independent external review approval is missing; owner waiver is not accepted for V2."]
+    : []),
+  ...(releasePolicy.broadcastEnabled && !v4ApprovalGatesPassed
+    ? ["Mainnet broadcast is enabled before every V4 approval gate passed. Disable it immediately."]
+    : []),
+  ...(!releasePolicy.broadcastEnabled
+    ? ["Mainnet deployment policy remains disabled."]
+    : []),
 ];
 
 line("Release status", blockers.length === 0 ? "READY FOR METAMASK" : "BLOCKED");

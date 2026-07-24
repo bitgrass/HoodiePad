@@ -1,0 +1,48 @@
+# HoodiePad V4 production cutover
+
+## Safe starting state
+
+```text
+HOODIEPAD_LAUNCH_VERSION=v2
+HOODIEPAD_BROADCAST_ENABLED=false
+HOODIEPAD_EXTERNAL_REVIEW_APPROVED=false
+```
+
+Do not configure a private key or server signer.
+
+## Read-only rollout
+
+1. Deploy the V4 registry build to staging.
+2. Confirm home, Explore, dashboard, and analytics contain no legacy V3 cards.
+3. Confirm the new V4 token appears and its direct token page reconstructs the
+   same PoolKey and PoolId as Robinhood Chain.
+4. Confirm the chart counts exact PoolManager `Swap` events for that PoolId.
+5. Confirm an old V3 token remains reachable only through its direct historical
+   URL.
+
+## Launch enablement prerequisites
+
+1. Install and lock the exact reviewed SDK and optional router versions.
+2. Discover the full HOODIE/WETH V4 PoolKey and recompute its PoolId.
+3. Record, review, and approve every required runtime bytecode hash.
+4. Implement and pass every check in
+   `REQUIRED_V4_CALIBRATION_CHECKS` on a fresh disposable Robinhood fork.
+5. Obtain independent external review.
+6. Run `npm run verify:robinhood:v4`.
+7. Run `npm run verify:release` with broadcast still disabled.
+
+## Canary
+
+Only after the prerequisites pass:
+
+1. enable the mainnet deployment policy in the canary environment;
+2. prepare the exact V4 transaction;
+3. review token, PoolKey, PoolId, fee beneficiaries, calldata, gas, and expiry;
+4. submit with the connected MetaMask account;
+5. verify the receipt and V4 invariant reconstruction;
+6. execute small direct HOODIE buy and sell canaries;
+7. verify chart, volume, holders, fee accrual, and claims;
+8. disable creation immediately if any invariant differs.
+
+Never reuse a V3 calibration, runtime snapshot, pool address assumption, or
+swap encoder as V4 evidence.

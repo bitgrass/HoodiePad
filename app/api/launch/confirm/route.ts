@@ -1,4 +1,9 @@
-import { airlockAbi } from "@whetstone-research/doppler-sdk/evm";
+import {
+  airlockAbi,
+  computePoolId,
+  dopplerHookInitializerAbi,
+  type V4PoolKey,
+} from "@whetstone-research/doppler-sdk/evm";
 import {
   decodeEventLog,
   getAddress,
@@ -6,7 +11,9 @@ import {
   type Address,
   type Hex,
 } from "viem";
-import product from "../../../../config/hoodiepad-v1.json";
+import legacyProduct from "../../../../config/hoodiepad-v1.json";
+import product from "../../../../config/hoodiepad-v2.json";
+import { PUBLIC_V4_MARKET_VERSION } from "../../../lib/market-version";
 import { createRobinhoodPublicClient } from "../../../lib/protocol";
 
 type ConfirmationRequest = {
@@ -17,6 +24,7 @@ type ConfirmationRequest = {
 
 const transactionHashPattern = /^0x[a-fA-F0-9]{64}$/;
 const addressPattern = /^0x[a-fA-F0-9]{40}$/;
+const poolIdPattern = /^0x[a-fA-F0-9]{64}$/;
 
 export async function POST(request: Request) {
   let body: ConfirmationRequest;
@@ -26,19 +34,23 @@ export async function POST(request: Request) {
     return Response.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
+  const isV4Confirmation =
+    typeof body.predictedPool === "string" &&
+    poolIdPattern.test(body.predictedPool);
   if (
     typeof body.transactionHash !== "string" ||
     !transactionHashPattern.test(body.transactionHash) ||
     typeof body.predictedToken !== "string" ||
     !addressPattern.test(body.predictedToken) ||
     typeof body.predictedPool !== "string" ||
-    !addressPattern.test(body.predictedPool)
+    (!isV4Confirmation && !addressPattern.test(body.predictedPool))
   ) {
     return Response.json({ error: "Invalid deployment confirmation request" }, { status: 422 });
   }
 
   try {
-    const receipt = await createRobinhoodPublicClient().getTransactionReceipt({
+    const client = createRobinhoodPublicClient();
+    const receipt = await client.getTransactionReceipt({
       hash: body.transactionHash as Hex,
     });
     if (receipt.status !== "success") {
@@ -49,7 +61,11 @@ export async function POST(request: Request) {
     }
 
     let confirmed:
-      | { token: Address; pool: Address }
+      | {
+          token: Address;
+          poolOrHook: Address;
+          initializer: Address;
+        }
       | undefined;
     for (const log of receipt.logs) {
       if (log.address.toLowerCase() !== product.contracts.airlock.toLowerCase()) continue;
@@ -63,12 +79,14 @@ export async function POST(request: Request) {
         const args = decoded.args as {
           asset: Address;
           numeraire: Address;
+          initializer: Address;
           poolOrHook: Address;
         };
         if (args.numeraire.toLowerCase() !== product.contracts.hoodie.toLowerCase()) continue;
         confirmed = {
           token: getAddress(args.asset),
-          pool: getAddress(args.poolOrHook),
+          poolOrHook: getAddress(args.poolOrHook),
+          initializer: getAddress(args.initializer),
         };
         break;
       } catch {
@@ -79,23 +97,75 @@ export async function POST(request: Request) {
     if (!confirmed) {
       return Response.json({ error: "No HoodiePad Airlock Create event was found" }, { status: 409 });
     }
+    if (confirmed.token.toLowerCase() !== body.predictedToken.toLowerCase()) {
+      return Response.json(
+        { error: "Confirmed token does not match the simulated deployment" },
+        { status: 409 },
+      );
+    }
+
+    if (isV4Confirmation) {
+      if (
+        confirmed.initializer.toLowerCase() !==
+        product.contracts.dopplerHookInitializer.toLowerCase()
+      ) {
+        return Response.json(
+          { error: "The deployment did not use the canonical HoodiePad V2 initializer" },
+          { status: 409 },
+        );
+      }
+      const state = await client.readContract({
+        address: getAddress(product.contracts.dopplerHookInitializer),
+        abi: dopplerHookInitializerAbi,
+        functionName: "getState",
+        args: [confirmed.token],
+      });
+      const poolKey = {
+        currency0: getAddress(state[5].currency0),
+        currency1: getAddress(state[5].currency1),
+        fee: Number(state[5].fee),
+        tickSpacing: Number(state[5].tickSpacing),
+        hooks: getAddress(state[5].hooks),
+      } satisfies V4PoolKey;
+      const poolId = computePoolId(poolKey);
+      if (poolId.toLowerCase() !== body.predictedPool.toLowerCase()) {
+        return Response.json(
+          { error: "Confirmed V4 PoolId does not match the simulated deployment" },
+          { status: 409 },
+        );
+      }
+      return Response.json({
+        status: "confirmed",
+        marketVersion: PUBLIC_V4_MARKET_VERSION,
+        transactionHash: receipt.transactionHash,
+        blockNumber: receipt.blockNumber.toString(),
+        creator: receipt.from,
+        token: confirmed.token,
+        pool: poolId,
+        poolKey,
+        externalHook: getAddress(state[2]),
+      });
+    }
+
     if (
-      confirmed.token.toLowerCase() !== body.predictedToken.toLowerCase() ||
-      confirmed.pool.toLowerCase() !== body.predictedPool.toLowerCase()
+      confirmed.initializer.toLowerCase() !==
+      legacyProduct.contracts.lockableV3Initializer.toLowerCase() ||
+      confirmed.poolOrHook.toLowerCase() !== body.predictedPool.toLowerCase()
     ) {
       return Response.json(
-        { error: "Confirmed token or pool does not match the simulated deployment" },
+        { error: "Confirmed legacy V3 pool does not match the simulated deployment" },
         { status: 409 },
       );
     }
 
     return Response.json({
       status: "confirmed",
+      marketVersion: "doppler-lockable-v3-v1",
       transactionHash: receipt.transactionHash,
       blockNumber: receipt.blockNumber.toString(),
       creator: receipt.from,
       token: confirmed.token,
-      pool: confirmed.pool,
+      pool: confirmed.poolOrHook,
     });
   } catch (error) {
     if (error instanceof TransactionReceiptNotFoundError) {

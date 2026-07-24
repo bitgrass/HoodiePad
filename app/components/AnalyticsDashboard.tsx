@@ -210,8 +210,8 @@ export function AnalyticsDashboard({
           <span>DATA METHOD</span>
           <h2>Onchain first.</h2>
           <p>
-            HoodiePad reads Airlock Create events and each canonical Uniswap V3
-            pool&apos;s Swap events. There is no demo dataset and no manual market list.
+            HoodiePad reads V4 Airlock Create events and each canonical PoolManager
+            Swap event. Legacy V3 launches are excluded from public analytics.
           </p>
           <dl>
             <div><dt>Source</dt><dd>{analytics.source}</dd></div>

@@ -65,6 +65,7 @@ type UploadedArtwork = {
 
 type ConfirmedDeployment = {
   status: "confirmed";
+  marketVersion: "doppler-multicurve-v4-v2";
   transactionHash: string;
   blockNumber: string;
   creator: string;
@@ -399,11 +400,14 @@ export function LaunchWizard() {
             </div>
             <div className="review-rules">
               <div><span>Network</span><strong>Robinhood Chain</strong></div>
+              <div><span>Market</span><strong>Multicurve V4</strong></div>
               <div><span>Canonical pair</span><strong>${draft.symbol} / HOODIE</strong></div>
+              <div><span>Target opening FDV</span><strong>$30,000</strong></div>
               <div><span>Creator recipient</span><strong>{shorten(address)}</strong></div>
               <div><span>Ecosystem Safe</span><strong>{shorten(ecosystemSafe)}</strong></div>
               <div><span>Trading fee</span><strong>1.00%</strong></div>
               <div><span>Creator share</span><strong>80%</strong></div>
+              <div><span>Market allocation</span><strong>100%</strong></div>
               <div><span>Max wallet</span><strong>2% for 24h</strong></div>
               <div><span>Migration</span><strong>None</strong></div>
             </div>
@@ -416,7 +420,7 @@ export function LaunchWizard() {
               <p>
                 {prepared?.productionReady
                   ? "The fork calibration, dependency snapshot, and live simulation passed. MetaMask will show the final mainnet transaction before anything is submitted."
-                  : "HoodiePad prepares and simulates the exact transaction first. Mainnet deployment appears only after every release check passes."}
+                  : "HoodiePad V2 is V4-only. Mainnet deployment appears only after the exact SDK, runtime, PoolKey, fork, and review gates pass."}
               </p>
             </div>
             {prepared && preparedWallet === address && (
@@ -435,9 +439,9 @@ export function LaunchWizard() {
                 {prepared.chainStatus.available && (
                   <dl className="prepared-facts">
                     <div><dt>Block</dt><dd>{prepared.chainStatus.blockNumber}</dd></div>
-                    <div><dt>HOODIE / WETH</dt><dd>{prepared.chainStatus.referencePool?.hoodiePerWeth} HOODIE</dd></div>
+                    <div><dt>Market version</dt><dd>Multicurve V4</dd></div>
                     <div><dt>Predicted token</dt><dd>{prepared.simulation.asset ? shorten(prepared.simulation.asset) : "—"}</dd></div>
-                    <div><dt>Predicted pool</dt><dd>{prepared.simulation.pool ? shorten(prepared.simulation.pool) : "—"}</dd></div>
+                    <div><dt>Predicted PoolId</dt><dd>{prepared.simulation.pool ? shorten(prepared.simulation.pool) : "—"}</dd></div>
                     <div><dt>Gas estimate</dt><dd>{prepared.simulation.gasEstimate ?? "—"}</dd></div>
                     <div><dt>Fork calibration</dt><dd>{prepared.calibration.approved ? `Block ${prepared.calibration.forkBlock}` : prepared.calibration.status}</dd></div>
                   </dl>
@@ -466,7 +470,7 @@ export function LaunchWizard() {
                 >
                   Open {confirmedDeployment ? "confirmed" : "predicted"} token page
                 </a>
-                {confirmedDeployment && <span>Pool {shorten(confirmedDeployment.pool)}</span>}
+                {confirmedDeployment && <span>V4 PoolId {shorten(confirmedDeployment.pool)}</span>}
               </div>
             )}
             {status === "error" && <p className="form-error">{errorMessage}</p>}

@@ -1,4 +1,4 @@
-import product from "../../../config/hoodiepad-v1.json";
+import product from "../../../config/hoodiepad-v2.json";
 import {
   readHoodiePadLaunches,
   summarizeHoodiePadLaunches,
@@ -10,7 +10,11 @@ export async function GET() {
   try {
     const markets = summarizeHoodiePadLaunches(await readHoodiePadLaunches());
     return Response.json(
-      { markets, refreshedAt: new Date().toISOString() },
+      {
+        marketVersion: product.marketVersion,
+        markets,
+        refreshedAt: new Date().toISOString(),
+      },
       {
         headers: {
           "Cache-Control": `public, max-age=0, s-maxage=${product.discovery.refreshSeconds}, stale-while-revalidate=30`,

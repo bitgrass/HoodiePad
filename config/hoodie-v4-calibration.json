@@ -1,0 +1,11 @@
+{
+  "version": 2,
+  "marketVersion": "doppler-multicurve-v4-v2",
+  "status": "pending",
+  "chainId": 4663,
+  "forkBlock": null,
+  "configHash": null,
+  "curveVersion": 1,
+  "completedAt": null,
+  "checks": []
+}

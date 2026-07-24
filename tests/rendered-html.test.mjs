@@ -223,20 +223,26 @@ test("prepares a connected-wallet launch draft but fails closed on protocol bloc
   const payload = await response.json();
   assert.equal(payload.productionReady, false);
   assert.match(payload.checksum, /^0x[a-f0-9]{64}$/);
+  assert.equal(payload.config.marketVersion, "doppler-multicurve-v4-v2");
   assert.equal(payload.config.numeraire, "0xC72c01AAB5f5678dc1d6f5C6d2B417d91D402Ba3");
   assert.equal(payload.config.creatorFeeRecipient, "0x1111111111111111111111111111111111111111");
   assert.equal(payload.config.ecosystemFeeRecipient, "0xAB10Efe787DB2ef3700b94578aeC68b98e0446A7");
+  assert.equal(payload.config.supply, "1000000000");
+  assert.equal(payload.config.tokensToSell, "1000000000");
+  assert.equal(payload.config.activeLpFee, 10000);
+  assert.equal(payload.config.rehypeFee, 0);
   assert.equal(payload.simulation.status, "unavailable");
   assert.equal(payload.chainStatus.available, false);
   assert.match(payload.metadata.key, /^token-metadata\/[a-f0-9]{64}\.json$/);
   assert.match(payload.metadata.url, /^http:\/\/localhost\/api\/metadata\?key=/);
   assert.ok(!payload.blockers.includes("Calibrate and snapshot the Robinhood V3 curve on a mainnet fork."));
-  assert.ok(payload.blockers.includes("Record external review approval or an explicit owner risk waiver."));
+  assert.ok(payload.blockers.includes("Record independent external review approval for HoodiePad V2."));
   assert.ok(payload.blockers.includes("Live Robinhood RPC verification is unavailable."));
-  assert.ok(payload.blockers.includes("Mainnet broadcast is disabled by policy."));
+  assert.ok(payload.blockers.includes("Mainnet broadcast remains disabled by policy."));
+  assert.ok(payload.blockers.includes("Complete every HoodiePad V2 Robinhood fork calibration check."));
   assert.ok(!payload.blockers.some((blocker) => blocker.includes("ecosystem Safe")));
-  assert.equal(payload.calibration.status, "passed");
-  assert.equal(payload.calibration.approved, true);
+  assert.equal(payload.calibration.status, "pending");
+  assert.equal(payload.calibration.approved, false);
   assert.equal(payload.deployment, null);
 
   const metadataResponse = await app.fetch(new Request(payload.metadata.url), env, ctx);
@@ -248,6 +254,7 @@ test("prepares a connected-wallet launch draft but fails closed on protocol bloc
   assert.equal(metadata.symbol, "HUG");
   assert.equal(metadata.properties.chain_id, 4663);
   assert.equal(metadata.properties.canonical_numeraire, "0xC72c01AAB5f5678dc1d6f5C6d2B417d91D402Ba3");
+  assert.equal(metadata.properties.market_version, "doppler-multicurve-v4-v2");
 });
 
 test("rejects a creator wallet that duplicates the ecosystem beneficiary", async () => {

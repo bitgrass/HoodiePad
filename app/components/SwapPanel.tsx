@@ -45,10 +45,12 @@ export function SwapPanel({
   token,
   symbol,
   poolUrl,
+  marketVersion = "doppler-lockable-v3-v1",
 }: {
   token: string;
   symbol: string;
   poolUrl: string;
+  marketVersion?: "doppler-lockable-v3-v1" | "doppler-multicurve-v4-v2";
 }) {
   const { address, connect, sendTransaction, waitForTransaction } = useWallet();
   const [side, setSide] = useState<"buy" | "sell">("buy");
@@ -159,6 +161,28 @@ export function SwapPanel({
 
   const inputSymbol = side === "buy" ? "HOODIE" : symbol;
   const outputSymbol = side === "buy" ? symbol : "HOODIE";
+
+  if (marketVersion === "doppler-multicurve-v4-v2") {
+    return (
+      <aside className="trade-panel">
+        <span className="preview-label">TRADE CANONICAL V4 POOL</span>
+        <h2>V4 market detected.</h2>
+        <p className="trade-warning">
+          HoodiePad has verified this V4 market. Deterministic in-app V4 routing
+          remains disabled until the Robinhood V4 quote, Permit2, native ETH,
+          and fee-claim fork gates all pass.
+        </p>
+        <a
+          className="button button-primary full-width"
+          href={poolUrl}
+          target="_blank"
+          rel="noreferrer"
+        >
+          Open canonical V4 pool on Uniswap ↗
+        </a>
+      </aside>
+    );
+  }
 
   return (
     <aside className="trade-panel">

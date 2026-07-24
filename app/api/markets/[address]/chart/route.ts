@@ -1,6 +1,9 @@
 import { getAddress } from "viem";
-import product from "../../../../../config/hoodiepad-v1.json";
-import { readHoodiePadLaunches } from "../../../../lib/launches";
+import product from "../../../../../config/hoodiepad-v2.json";
+import {
+  readHoodiePadLaunches,
+  readLegacyHoodiePadLaunches,
+} from "../../../../lib/launches";
 
 export const revalidate = 0;
 
@@ -11,10 +14,16 @@ export async function GET(
   try {
     const { address: rawAddress } = await context.params;
     const address = getAddress(rawAddress);
-    const launches = await readHoodiePadLaunches();
-    const market = launches.find(
+    const publicLaunches = await readHoodiePadLaunches();
+    let market = publicLaunches.find(
       (launch) => launch.address.toLowerCase() === address.toLowerCase(),
     );
+    if (!market) {
+      const legacyLaunches = await readLegacyHoodiePadLaunches();
+      market = legacyLaunches.find(
+        (launch) => launch.address.toLowerCase() === address.toLowerCase(),
+      );
+    }
     if (!market) {
       return Response.json({ error: "This is not an official HoodiePad market" }, { status: 404 });
     }

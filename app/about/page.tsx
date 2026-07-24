@@ -29,16 +29,16 @@ export default function AboutPage() {
           ))}
         </div>
         <aside className="protocol-note">
-          <span className="status-chip amber">V1 protocol status</span>
-          <h2>Lockable V3 first.</h2>
+          <span className="status-chip amber">V2 protocol status</span>
+          <h2>Multicurve V4 only.</h2>
           <p>
-            The pinned Doppler SDK supports Robinhood&apos;s Lockable Uniswap V3 path.
-            Standard V4 Multicurve remains disabled until a canonical Robinhood
-            initializer is published, whitelisted, and fork-tested.
+            Public discovery and analytics read only validated Doppler Multicurve
+            V4 CHILD/HOODIE markets. Legacy V3 launches remain available only
+            through their direct historical token pages.
           </p>
           <p>
-            Production broadcast also requires the HOODIE ecosystem Safe and a
-            calibrated, snapshotted curve.
+            New V4 deployment remains fail-closed until the exact SDK, runtime
+            hashes, reference PoolKey, fork calibration, and external review gates pass.
           </p>
           <Link className="button button-dark" href="/launch">Open launch studio ↗</Link>
         </aside>
@@ -58,4 +58,3 @@ export default function AboutPage() {
     </AppShell>
   );
 }
-
