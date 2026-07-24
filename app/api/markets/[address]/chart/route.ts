@@ -1,7 +1,6 @@
 import { getAddress } from "viem";
 import product from "../../../../../config/hoodiepad-v1.json";
-import { readMarketAnalytics } from "../../../../lib/launches";
-import { readHoodiePadMarket } from "../../../../lib/market";
+import { readHoodiePadLaunches } from "../../../../lib/launches";
 
 export const revalidate = 0;
 
@@ -12,11 +11,14 @@ export async function GET(
   try {
     const { address: rawAddress } = await context.params;
     const address = getAddress(rawAddress);
-    const market = await readHoodiePadMarket(address);
-    if (!market.official) {
+    const launches = await readHoodiePadLaunches();
+    const market = launches.find(
+      (launch) => launch.address.toLowerCase() === address.toLowerCase(),
+    );
+    if (!market) {
       return Response.json({ error: "This is not an official HoodiePad market" }, { status: 404 });
     }
-    const analytics = await readMarketAnalytics(market);
+    const analytics = market.analytics;
     return Response.json(
       {
         token: market.address,

@@ -10,22 +10,31 @@ export const metadata: Metadata = {
   description:
     "Launch fixed-supply token markets paired with HOODIE. No presale, no migration, and creators keep 80% of canonical-pool fees.",
   openGraph: {
-    title: "HoodiePad — The hood stays on",
+    title: "HoodiePad — Launch markets. Keep 80%.",
     description:
       "Fixed-supply token markets paired with HOODIE on Robinhood Chain.",
     type: "website",
-    images: [{ url: "/hoodie-logo.jpg", width: 400, height: 400, alt: "HoodiePad logo" }],
+    images: [
+      {
+        url: "/og.jpg",
+        width: 1200,
+        height: 630,
+        alt: "HoodiePad — Launch markets. Keep 80%.",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
-    images: ["/hoodie-logo.jpg"],
+    images: ["/og.jpg"],
   },
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body><WalletProvider>{children}</WalletProvider></body>
+      <body>
+        <WalletProvider>{children}</WalletProvider>
+      </body>
     </html>
   );
 }

@@ -21,22 +21,38 @@ export type MarketSwapPoint = {
   blockNumber: string;
   transactionHash: Hex;
   logIndex: number;
+  timestamp: number;
   price: number;
   hoodieVolumeRaw: string;
+  hoodieFeeVolumeRaw: string;
   childVolumeRaw: string;
+};
+
+export type MarketDailyActivity = {
+  date: string;
+  swaps: number;
+  hoodieVolumeRaw: string;
+  hoodieFeeVolumeRaw: string;
 };
 
 export type MarketAnalytics = {
   points: MarketSwapPoint[];
   swapCount: number;
+  swapCount24h: number;
   hoodieVolumeRaw: string;
+  hoodieVolume24hRaw: string;
+  hoodieFeeVolumeRaw: string;
+  hoodieFeeVolume24hRaw: string;
   hoodieVolume: string;
+  hoodieVolume24h: string;
   changePercent: number | null;
+  daily: MarketDailyActivity[];
 };
 
 export type HoodiePadLaunch = HoodiePadMarket & {
   creator: Address;
   launchBlock: string;
+  launchTimestamp: number;
   launchTransactionHash: Hex;
   analytics: MarketAnalytics;
 };
@@ -118,10 +134,9 @@ async function readEventChunks(
 export async function readMarketAnalytics(
   market: Pick<HoodiePadMarket, "pool" | "decimals" | "hoodiePerToken">,
   client = createRobinhoodPublicClient(),
+  fromBlock = launchStartBlock,
 ): Promise<MarketAnalytics> {
   const latestBlock = await client.getBlockNumber();
-  const configuredStart = latestBlock - BigInt(product.discovery.chartLookbackBlocks);
-  const fromBlock = configuredStart > launchStartBlock ? configuredStart : launchStartBlock;
   const logs = await readEventChunks(client, {
     address: market.pool,
     abi: uniswapV3PoolAbi,
@@ -130,7 +145,7 @@ export async function readMarketAnalytics(
     toBlock: latestBlock,
   });
 
-  const points = logs
+  const decodedPoints = logs
     .map((log) => {
       const args = log.args as {
         amount0?: bigint;
@@ -150,8 +165,10 @@ export async function readMarketAnalytics(
         blockNumber: log.blockNumber.toString(),
         transactionHash: log.transactionHash,
         logIndex: log.logIndex ?? 0,
+        timestamp: 0,
         price: Math.pow(1.0001, Number(args.tick)),
         hoodieVolumeRaw: absolute(args.amount1).toString(),
+        hoodieFeeVolumeRaw: args.amount1 > 0n ? args.amount1.toString() : "0",
         childVolumeRaw: absolute(args.amount0).toString(),
       } satisfies MarketSwapPoint;
     })
@@ -164,10 +181,56 @@ export async function readMarketAnalytics(
         : blockDifference < 0n ? -1 : 1;
     });
 
+  const uniqueBlocks = [...new Set(decodedPoints.map((point) => point.blockNumber))];
+  const timestamps = new Map<string, number>();
+  await Promise.all(uniqueBlocks.map(async (blockNumber) => {
+    const block = await client.getBlock({ blockNumber: BigInt(blockNumber) });
+    timestamps.set(blockNumber, Number(block.timestamp));
+  }));
+  const points = decodedPoints.map((point) => ({
+    ...point,
+    timestamp: timestamps.get(point.blockNumber) ?? 0,
+  }));
+
   const hoodieVolumeRaw = points.reduce(
     (total, point) => total + BigInt(point.hoodieVolumeRaw),
     0n,
   );
+  const hoodieFeeVolumeRaw = points.reduce(
+    (total, point) => total + BigInt(point.hoodieFeeVolumeRaw),
+    0n,
+  );
+  const latestTimestamp = Math.max(
+    Math.floor(Date.now() / 1000),
+    ...points.map((point) => point.timestamp),
+  );
+  const cutoff24h = latestTimestamp - 24 * 60 * 60;
+  const points24h = points.filter((point) => point.timestamp >= cutoff24h);
+  const hoodieVolume24hRaw = points24h.reduce(
+    (total, point) => total + BigInt(point.hoodieVolumeRaw),
+    0n,
+  );
+  const hoodieFeeVolume24hRaw = points24h.reduce(
+    (total, point) => total + BigInt(point.hoodieFeeVolumeRaw),
+    0n,
+  );
+  const dailyActivity = new Map<string, {
+    swaps: number;
+    hoodieVolumeRaw: bigint;
+    hoodieFeeVolumeRaw: bigint;
+  }>();
+  for (const point of points) {
+    const date = new Date(point.timestamp * 1000).toISOString().slice(0, 10);
+    const current = dailyActivity.get(date) ?? {
+      swaps: 0,
+      hoodieVolumeRaw: 0n,
+      hoodieFeeVolumeRaw: 0n,
+    };
+    current.swaps += 1;
+    current.hoodieVolumeRaw += BigInt(point.hoodieVolumeRaw);
+    current.hoodieFeeVolumeRaw += BigInt(point.hoodieFeeVolumeRaw);
+    dailyActivity.set(date, current);
+  }
   const firstPrice = points[0]?.price;
   const latestPrice =
     points.at(-1)?.price ??
@@ -182,9 +245,22 @@ export async function readMarketAnalytics(
   return {
     points: points.slice(-200),
     swapCount: points.length,
+    swapCount24h: points24h.length,
     hoodieVolumeRaw: hoodieVolumeRaw.toString(),
+    hoodieVolume24hRaw: hoodieVolume24hRaw.toString(),
+    hoodieFeeVolumeRaw: hoodieFeeVolumeRaw.toString(),
+    hoodieFeeVolume24hRaw: hoodieFeeVolume24hRaw.toString(),
     hoodieVolume: compactAmount(hoodieVolumeRaw),
+    hoodieVolume24h: compactAmount(hoodieVolume24hRaw),
     changePercent,
+    daily: [...dailyActivity.entries()]
+      .sort(([first], [second]) => first.localeCompare(second))
+      .map(([date, activity]) => ({
+        date,
+        swaps: activity.swaps,
+        hoodieVolumeRaw: activity.hoodieVolumeRaw.toString(),
+        hoodieFeeVolumeRaw: activity.hoodieFeeVolumeRaw.toString(),
+      })),
   };
 }
 
@@ -217,18 +293,20 @@ async function loadHoodiePadLaunches(
       ) {
         throw new Error("Incomplete Airlock Create event");
       }
-      const [market, receipt] = await Promise.all([
+      const [market, receipt, launchBlock] = await Promise.all([
         readHoodiePadMarket(args.asset, client),
         client.getTransactionReceipt({ hash: log.transactionHash }),
+        client.getBlock({ blockNumber: log.blockNumber }),
       ]);
       if (!market.official || market.pool.toLowerCase() !== args.poolOrHook.toLowerCase()) {
         throw new Error("Create event is not an official HoodiePad market");
       }
-      const analytics = await readMarketAnalytics(market, client);
+      const analytics = await readMarketAnalytics(market, client, log.blockNumber);
       return {
         ...market,
         creator: getAddress(receipt.from),
         launchBlock: log.blockNumber.toString(),
+        launchTimestamp: Number(launchBlock.timestamp),
         launchTransactionHash: log.transactionHash,
         analytics,
       } satisfies HoodiePadLaunch;

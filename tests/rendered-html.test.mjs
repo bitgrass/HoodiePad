@@ -61,6 +61,7 @@ test("server-renders the finished HoodiePad home page with the supplied logo", a
   assert.match(html, /Launch it\./);
   assert.match(html, /creators keep 80%/i);
   assert.match(html, /hoodie-logo\.jpg/);
+  assert.match(html, /href="\/analytics"/);
   assert.doesNotMatch(html, /_vinext\/image[^\"]*hoodie-logo/);
   assert.doesNotMatch(html, />HOODIEPAD</);
   assert.doesNotMatch(html, /codex-preview|react-loading-skeleton|Your site is taking shape/i);

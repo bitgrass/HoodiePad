@@ -27,6 +27,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <Brand />
         <nav aria-label="Main navigation">
           <Link href="/explore">Explore</Link>
+          <Link href="/analytics">Analytics</Link>
           <Link href="/launch">Launch</Link>
           <Link href="/dashboard">Dashboard</Link>
           <Link href="/about">How it works</Link>
@@ -60,4 +61,3 @@ export function AppShell({ children }: { children: ReactNode }) {
     </div>
   );
 }
-

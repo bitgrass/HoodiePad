@@ -69,6 +69,54 @@ export type PreparedSwap = {
   expiresAt: string;
 };
 
+export class SwapPreparationError extends Error {
+  code: "MAX_WALLET" | "TRADE_SIZE" | "QUOTE_UNAVAILABLE";
+  maximumAmount?: string;
+  inputSymbol?: string;
+
+  constructor(
+    message: string,
+    input: {
+      code: SwapPreparationError["code"];
+      maximumAmount?: string;
+      inputSymbol?: string;
+    },
+  ) {
+    super(message);
+    this.name = "SwapPreparationError";
+    this.code = input.code;
+    this.maximumAmount = input.maximumAmount;
+    this.inputSymbol = input.inputSymbol;
+  }
+}
+
+function isQuoterRevert(error: unknown) {
+  return error instanceof Error &&
+    error.message.includes("quoteExactInputSingle") &&
+    error.message.toLowerCase().includes("revert");
+}
+
+function formattedMaximumInput(raw: bigint) {
+  const conservative = raw * 995n / 1_000n;
+  return formatUnits(conservative > 0n ? conservative : raw, 18);
+}
+
+export function estimateMaxInputAtSpot(input: {
+  childBalance: bigint;
+  maxBalance: bigint;
+  hoodiePerToken: string;
+}) {
+  if (input.childBalance >= input.maxBalance) return 0n;
+  const normalizedPrice = input.hoodiePerToken.replaceAll(",", "");
+  if (normalizedPrice === "Unavailable") return null;
+  try {
+    const price = parseUnits(normalizedPrice, 18);
+    return (input.maxBalance - input.childBalance) * price / 10n ** 18n;
+  } catch {
+    return null;
+  }
+}
+
 export function encodeV3ExactInputSwap(input: {
   recipient: Address;
   tokenIn: Address;
@@ -147,14 +195,8 @@ export async function prepareHoodiePadSwap(input: {
     publicClient: client,
     chainId: ROBINHOOD_CHAIN_ID,
   });
-  const [quote, inputBalance, childBalance, tokenAllowance, permitAllowance] =
+  const [inputBalance, childBalance, tokenAllowance, permitAllowance] =
     await Promise.all([
-      sdk.quoter.quoteExactInputV3({
-        tokenIn: inputToken,
-        tokenOut: outputToken,
-        amountIn,
-        fee: product.pool.fee,
-      }),
       client.readContract({
         address: inputToken,
         abi: erc20Abi,
@@ -184,12 +226,104 @@ export async function prepareHoodiePadSwap(input: {
   if (inputBalance < amountIn) {
     throw new Error(`Insufficient ${inputSymbol} balance`);
   }
+
+  if (input.side === "buy" && market.balanceLimitActive) {
+    const spotMaximum = estimateMaxInputAtSpot({
+      childBalance,
+      maxBalance: BigInt(market.maxBalanceRaw),
+      hoodiePerToken: market.hoodiePerToken,
+    });
+    if (spotMaximum !== null && amountIn > spotMaximum) {
+      const maximumAmount = formattedMaximumInput(spotMaximum);
+      throw new SwapPreparationError(
+        spotMaximum === 0n
+          ? "This wallet has reached the active 2% maximum-wallet limit."
+          : `This buy would exceed the active 2% maximum-wallet limit. Try at most about ${maximumAmount} HOODIE.`,
+        {
+          code: "MAX_WALLET",
+          maximumAmount: spotMaximum > 0n ? maximumAmount : undefined,
+          inputSymbol,
+        },
+      );
+    }
+  }
+
+  const quoteExactInput = (candidateAmount: bigint) =>
+    sdk.quoter.quoteExactInputV3({
+      tokenIn: inputToken,
+      tokenOut: outputToken,
+      amountIn: candidateAmount,
+      fee: product.pool.fee,
+    });
+
+  let quote: Awaited<ReturnType<typeof quoteExactInput>>;
+  try {
+    quote = await quoteExactInput(amountIn);
+  } catch (error) {
+    if (!isQuoterRevert(error)) throw error;
+
+    let quoteableAmount = amountIn / 2n;
+    let quoteable = false;
+    for (let attempt = 0; attempt < 10 && quoteableAmount > 0n; attempt += 1) {
+      try {
+        await quoteExactInput(quoteableAmount);
+        quoteable = true;
+        break;
+      } catch (probeError) {
+        if (!isQuoterRevert(probeError)) throw probeError;
+        quoteableAmount /= 2n;
+      }
+    }
+    if (!quoteable || quoteableAmount <= 0n) {
+      throw new SwapPreparationError(
+        "The canonical pool cannot quote this trade right now. Try a smaller amount or use the Uniswap pool link.",
+        { code: "QUOTE_UNAVAILABLE", inputSymbol },
+      );
+    }
+
+    let lower = quoteableAmount;
+    let upper = amountIn;
+    for (let attempt = 0; attempt < 8 && upper - lower > 1n; attempt += 1) {
+      const candidate = (lower + upper) / 2n;
+      try {
+        await quoteExactInput(candidate);
+        lower = candidate;
+      } catch (probeError) {
+        if (!isQuoterRevert(probeError)) throw probeError;
+        upper = candidate;
+      }
+    }
+    const maximumAmount = formattedMaximumInput(lower);
+    throw new SwapPreparationError(
+      `This trade reaches the available curve boundary. Try at most about ${maximumAmount} ${inputSymbol}.`,
+      {
+        code: "TRADE_SIZE",
+        maximumAmount,
+        inputSymbol,
+      },
+    );
+  }
+
   if (
     input.side === "buy" &&
     market.balanceLimitActive &&
     childBalance + quote.amountOut > BigInt(market.maxBalanceRaw)
   ) {
-    throw new Error("This buy would exceed the active 2% maximum-wallet limit");
+    const remaining = BigInt(market.maxBalanceRaw) - childBalance;
+    const maximumRaw = remaining > 0n
+      ? amountIn * remaining / quote.amountOut
+      : 0n;
+    const maximumAmount = formattedMaximumInput(maximumRaw);
+    throw new SwapPreparationError(
+      maximumRaw === 0n
+        ? "This wallet has reached the active 2% maximum-wallet limit."
+        : `This buy would exceed the active 2% maximum-wallet limit. Try at most about ${maximumAmount} HOODIE.`,
+      {
+        code: "MAX_WALLET",
+        maximumAmount: maximumRaw > 0n ? maximumAmount : undefined,
+        inputSymbol,
+      },
+    );
   }
 
   const minimumOut =

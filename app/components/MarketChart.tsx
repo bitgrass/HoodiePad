@@ -85,8 +85,8 @@ export function MarketChart({
         <div className="chart-empty"><strong>Chart unavailable</strong><p>{error}</p></div>
       ) : data && data.points.length === 0 ? (
         <div className="chart-empty">
-          <strong>No swaps in the current chart window.</strong>
-          <p>A confirmed in-app or external swap will add a new onchain chart point.</p>
+          <strong>No confirmed swaps yet.</strong>
+          <p>A confirmed in-app or external swap will add the first onchain chart point.</p>
         </div>
       ) : (
         <div className="chart-canvas">
@@ -108,10 +108,10 @@ export function MarketChart({
         </div>
       )}
       <div className="chart-metrics">
-        <div><span>Recent swaps</span><strong>{data?.swapCount ?? "—"}</strong></div>
-        <div><span>Recent volume</span><strong>{data ? `${data.hoodieVolume} HOODIE` : "—"}</strong></div>
+        <div><span>All-time swaps</span><strong>{data?.swapCount ?? "—"}</strong></div>
+        <div><span>All-time volume</span><strong>{data ? `${data.hoodieVolume} HOODIE` : "—"}</strong></div>
         <div>
-          <span>Period change</span>
+          <span>All-time change</span>
           <strong className={change !== null && change !== undefined && change < 0 ? "negative" : ""}>
             {change === null || change === undefined
               ? "New"

@@ -1,4 +1,8 @@
-import { prepareHoodiePadSwap, type SwapSide } from "../../../lib/swap";
+import {
+  prepareHoodiePadSwap,
+  SwapPreparationError,
+  type SwapSide,
+} from "../../../lib/swap";
 
 type SwapRequest = {
   token?: unknown;
@@ -45,8 +49,15 @@ export async function POST(request: Request) {
       headers: { "Cache-Control": "no-store" },
     });
   } catch (error) {
+    const details = error instanceof SwapPreparationError
+      ? {
+          code: error.code,
+          maximumAmount: error.maximumAmount,
+          inputSymbol: error.inputSymbol,
+        }
+      : {};
     return Response.json(
-      { error: safeSwapError(error) },
+      { error: safeSwapError(error), ...details },
       { status: 409 },
     );
   }

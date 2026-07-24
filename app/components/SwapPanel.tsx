@@ -26,6 +26,13 @@ type PreparedSwap = {
   simulationPassed: boolean;
 };
 
+type SwapErrorPayload = {
+  error?: string;
+  code?: "MAX_WALLET" | "TRADE_SIZE" | "QUOTE_UNAVAILABLE";
+  maximumAmount?: string;
+  inputSymbol?: string;
+};
+
 function displayAmount(value: string) {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return value;
@@ -49,6 +56,7 @@ export function SwapPanel({
   const [slippageBps, setSlippageBps] = useState(100);
   const [prepared, setPrepared] = useState<PreparedSwap | null>(null);
   const [quoteError, setQuoteError] = useState("");
+  const [suggestedMaximum, setSuggestedMaximum] = useState("");
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState("");
   const [transactionHash, setTransactionHash] = useState("");
@@ -59,8 +67,16 @@ export function SwapPanel({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ token, account: address, side, amount, slippageBps }),
     });
-    const payload = await response.json() as PreparedSwap & { error?: string };
-    if (!response.ok) throw new Error(payload.error ?? "Could not prepare this swap");
+    const payload = await response.json() as PreparedSwap & SwapErrorPayload;
+    if (!response.ok) {
+      const quoteFailure = new Error(
+        payload.error ?? "Could not prepare this swap",
+      ) as Error & SwapErrorPayload;
+      quoteFailure.code = payload.code;
+      quoteFailure.maximumAmount = payload.maximumAmount;
+      quoteFailure.inputSymbol = payload.inputSymbol;
+      throw quoteFailure;
+    }
     return payload;
   }, [address, amount, side, slippageBps, token]);
 
@@ -73,11 +89,17 @@ export function SwapPanel({
         if (active) {
           setPrepared(next);
           setQuoteError("");
+          setSuggestedMaximum("");
         }
       } catch (error) {
         if (active) {
           setPrepared(null);
           setQuoteError(error instanceof Error ? error.message : "Quote unavailable");
+          setSuggestedMaximum(
+            error instanceof Error && "maximumAmount" in error
+              ? String((error as Error & SwapErrorPayload).maximumAmount ?? "")
+              : "",
+          );
         }
       }
     }, 500);
@@ -95,6 +117,7 @@ export function SwapPanel({
     if (!amount || Number(amount) <= 0) return;
     setBusy(true);
     setQuoteError("");
+    setSuggestedMaximum("");
     setTransactionHash("");
     try {
       let current = await prepare();
@@ -123,6 +146,11 @@ export function SwapPanel({
       window.setTimeout(() => window.location.reload(), 1_500);
     } catch (error) {
       setQuoteError(error instanceof Error ? error.message : "Swap failed");
+      setSuggestedMaximum(
+        error instanceof Error && "maximumAmount" in error
+          ? String((error as Error & SwapErrorPayload).maximumAmount ?? "")
+          : "",
+      );
       setProgress("");
     } finally {
       setBusy(false);
@@ -144,6 +172,7 @@ export function SwapPanel({
             setAmount("");
             setPrepared(null);
             setQuoteError("");
+            setSuggestedMaximum("");
           }}
         >
           Buy
@@ -156,6 +185,7 @@ export function SwapPanel({
             setAmount("");
             setPrepared(null);
             setQuoteError("");
+            setSuggestedMaximum("");
           }}
         >
           Sell
@@ -173,6 +203,7 @@ export function SwapPanel({
               setAmount(event.target.value.replace(/[^0-9.]/g, ""));
               setPrepared(null);
               setQuoteError("");
+              setSuggestedMaximum("");
             }}
           />
           <strong>{inputSymbol}</strong>
@@ -214,6 +245,7 @@ export function SwapPanel({
               setSlippageBps(Number(event.target.value));
               setPrepared(null);
               setQuoteError("");
+              setSuggestedMaximum("");
             }}
           >
             <option value={50}>0.5%</option>
@@ -224,6 +256,21 @@ export function SwapPanel({
         </label>
       </div>
       {quoteError && <p className="swap-error" role="alert">{quoteError}</p>}
+      {suggestedMaximum && (
+        <button
+          type="button"
+          className="swap-use-maximum"
+          disabled={busy}
+          onClick={() => {
+            setAmount(suggestedMaximum);
+            setPrepared(null);
+            setQuoteError("");
+            setSuggestedMaximum("");
+          }}
+        >
+          Use suggested maximum: {displayAmount(suggestedMaximum)} {inputSymbol}
+        </button>
+      )}
       {progress && <p className="swap-progress" role="status">{progress}</p>}
       {transactionHash && (
         <a

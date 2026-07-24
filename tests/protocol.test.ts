@@ -21,7 +21,10 @@ import {
   runtimeHashMatches,
 } from "../app/lib/protocol";
 import { getReleasePolicy } from "../app/lib/release-policy";
-import { encodeV3ExactInputSwap } from "../app/lib/swap";
+import {
+  encodeV3ExactInputSwap,
+  estimateMaxInputAtSpot,
+} from "../app/lib/swap";
 import {
   checkObjectStorage,
   getStoredObject,
@@ -235,4 +238,30 @@ test("encodes an exact-input HoodiePad V3 swap with recipient and slippage prote
   assert.equal(command[2], 9_000_000n);
   assert.match(command[3], new RegExp(`^${hoodie.toLowerCase()}002710${child.slice(2).toLowerCase()}$`));
   assert.equal(command[4], true);
+});
+
+test("prevents oversized buys before invoking the V3 quoter during the 2% wallet window", () => {
+  const token = 10n ** 18n;
+  const maximumInput = estimateMaxInputAtSpot({
+    childBalance: 11_000_000n * token,
+    maxBalance: 20_000_000n * token,
+    hoodiePerToken: "0.065",
+  });
+  assert.equal(maximumInput, 585_000n * token);
+  assert.equal(
+    estimateMaxInputAtSpot({
+      childBalance: 20_000_000n * token,
+      maxBalance: 20_000_000n * token,
+      hoodiePerToken: "0.065",
+    }),
+    0n,
+  );
+  assert.equal(
+    estimateMaxInputAtSpot({
+      childBalance: 0n,
+      maxBalance: 20_000_000n * token,
+      hoodiePerToken: "Unavailable",
+    }),
+    null,
+  );
 });
