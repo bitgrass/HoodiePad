@@ -24,11 +24,14 @@ export async function GET(
         token: market.address,
         pool: market.pool,
         currentPrice: market.hoodiePerToken,
+        fdvHoodie: market.fdvHoodie,
         points: analytics.points,
         swapCount: analytics.swapCount,
         hoodieVolume: analytics.hoodieVolume,
         changePercent: analytics.changePercent,
         latestBlock: analytics.points.at(-1)?.blockNumber ?? null,
+        holderCount: analytics.holderCount,
+        holders: analytics.holders,
       },
       {
         headers: {

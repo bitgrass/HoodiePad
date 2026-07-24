@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useWallet } from "./WalletProvider";
 
 type WalletTransaction = {
-  kind: "token-approval" | "permit2-approval" | "swap";
+  kind: "token-approval" | "swap";
   label: string;
   from: string;
   to: string;
@@ -297,8 +297,8 @@ export function SwapPanel({
               : `Swap ${inputSymbol} for ${outputSymbol}`}
       </button>
       <p className="trade-warning">
-        Quotes come from the canonical Doppler V3 Quoter. Exact-amount approvals and the final
-        Universal Router swap are always confirmed in MetaMask.
+        Quotes come from the canonical Uniswap V3 Quoter. The exact-amount approval and direct
+        SwapRouter02 transaction are always confirmed in MetaMask.
       </p>
       <a className="external-trade-link" href={poolUrl} target="_blank" rel="noreferrer">
         Open the same pool on Uniswap ↗

@@ -34,9 +34,10 @@ In-app swaps use this fail-closed sequence:
 1. Validate that the selected token is an official HoodiePad market.
 2. Quote exact-input execution through the canonical Doppler V3 Quoter.
 3. Verify the input balance and active maximum-wallet restriction.
-4. Request exact-input ERC-20 and Permit2 approvals when required.
+4. Request an exact-input ERC-20 approval for the official Robinhood
+   `SwapRouter02` when required.
 5. After approval confirmation, prepare the quote again and estimate the exact
-   Universal Router transaction against current Robinhood state.
+   direct V3 swap against current Robinhood state.
 6. Submit the simulated swap only after explicit MetaMask confirmation.
 
 The app never receives a private key and never submits a swap from the server.
@@ -47,7 +48,7 @@ The app never receives a private key and never submits a swap from the server.
 - A newly confirmed launch appears automatically without adding a database row.
 - Initial registry reads perform multiple `eth_getLogs` calls; Railway must use
   the production Alchemy RPC rather than the rate-limited public endpoint.
-- Exact-amount approvals reduce exposure but can require two approval
-  transactions before a wallet's first swap.
+- Exact-amount approvals reduce exposure and require one approval transaction
+  before a wallet's first direct-router swap.
 - Changing the V1 fee, curve, supply, numeraire, or creator allocation remains
   outside this ADR and still requires a separate economic decision.

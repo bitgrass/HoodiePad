@@ -61,6 +61,7 @@ test("server-renders the finished HoodiePad home page with the supplied logo", a
   assert.match(html, /Launch it\./);
   assert.match(html, /creators keep 80%/i);
   assert.match(html, /hoodie-logo\.jpg/);
+  assert.match(html, /rel="icon"[^>]+hoodie-logo\.jpg/);
   assert.match(html, /href="\/analytics"/);
   assert.doesNotMatch(html, /_vinext\/image[^\"]*hoodie-logo/);
   assert.doesNotMatch(html, />HOODIEPAD</);
@@ -79,6 +80,7 @@ test("freezes the V1 economic, wallet, and Safe invariants", async () => {
   assert.equal(product.contracts.hoodieEcosystemSafe, "0xAB10Efe787DB2ef3700b94578aeC68b98e0446A7");
   assert.equal(product.contracts.permit2, "0x000000000022D473030F116dDEE9F6B43aC78BA3");
   assert.equal(product.contracts.uniswapV3Quoter, "0x33e885ed0ec9bf04ecfb19341582aadcb4c8a9e7");
+  assert.equal(product.contracts.uniswapSwapRouter02, "0x8bcEaA40B9AcdfAedF85AdF4FF01F5Ad6517937f");
   assert.equal(product.contracts.weth, "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73");
   assert.equal(product.hoodieReferencePool.poolId, "0x590eb1069a71fe72e3470f094c324513da3691987868a2b355fd8f29713d889b");
   assert.equal(product.hoodieReferencePool.currency0, product.contracts.weth);

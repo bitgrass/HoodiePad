@@ -117,9 +117,9 @@ Then complete these checks:
    requests beginning at block `17630000`.
 10. Open the token page, enter a small HOODIE amount, and confirm that the
     in-app quote loads. For a canary wallet, complete the exact-amount ERC-20
-    and Permit2 approvals, wait for HoodiePad to re-simulate, and then confirm
-    the Universal Router swap in MetaMask. Confirm the chart updates after the
-    swap is final.
+    approval, wait for HoodiePad to re-simulate, and then confirm the direct
+    SwapRouter02 transaction in MetaMask. Confirm the chart, recent trades,
+    holder table, volume, and FDV update after the swap is final.
 
 ## 5. Rollback and operations
 

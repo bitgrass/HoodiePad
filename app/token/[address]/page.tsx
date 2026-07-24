@@ -1,6 +1,7 @@
 import Link from "next/link";
 import product from "../../../config/hoodiepad-v1.json";
 import { AppShell } from "../../components/AppShell";
+import { MarketActivity } from "../../components/MarketActivity";
 import { MarketChart } from "../../components/MarketChart";
 import { SwapPanel } from "../../components/SwapPanel";
 import { readHoodiePadMarket, type HoodiePadMarket } from "../../lib/market";
@@ -11,20 +12,6 @@ const transactionHashPattern = /^0x[a-fA-F0-9]{64}$/;
 
 function shorten(value: string) {
   return `${value.slice(0, 8)}…${value.slice(-6)}`;
-}
-
-function grouped(value: string) {
-  const [whole, fraction] = value.split(".");
-  const result = BigInt(whole).toLocaleString("en-US");
-  return fraction ? `${result}.${fraction}` : result;
-}
-
-function limitEndLabel(timestamp: number) {
-  return new Intl.DateTimeFormat("en-US", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    timeZone: "UTC",
-  }).format(new Date(timestamp * 1000));
 }
 
 function MarketUnavailable({ address, message }: { address: string; message: string }) {
@@ -154,6 +141,10 @@ export default async function TokenPage({
               <span>Onchain spot price</span>
               <strong>{market.hoodiePerToken} HOODIE</strong>
             </div>
+            <div>
+              <span>Market cap (FDV)</span>
+              <strong>{market.fdvHoodie} HOODIE</strong>
+            </div>
             <span className="live-chain-chip">
               {market.hasSwapActivity ? "ACTIVE · ONCHAIN" : "POOL READY"}
             </span>
@@ -176,19 +167,7 @@ export default async function TokenPage({
         <SwapPanel token={market.address} symbol={market.symbol} poolUrl={uniswapPool} />
       </section>
 
-      <section className="market-info section-frame">
-        <h2>Market rules</h2>
-        <div>
-          <span>Canonical quote</span><strong>HOODIE</strong>
-          <span>Supply</span><strong>{grouped(market.totalSupply)}</strong>
-          <span>Migration</span><strong>None</strong>
-          <span>Creator allocation</span><strong>0%</strong>
-          <span>Maximum wallet</span><strong>{grouped(market.maxBalance)}</strong>
-          <span>Limit expiry</span><strong>{limitEndLabel(market.balanceLimitEnd)} UTC</strong>
-          <span>Token ordering</span><strong>CHILD / HOODIE</strong>
-          <span>Chain</span><strong>Robinhood · 4663</strong>
-        </div>
-      </section>
+      <MarketActivity token={market.address} symbol={market.symbol} />
     </AppShell>
   );
 }

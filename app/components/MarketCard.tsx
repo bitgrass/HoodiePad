@@ -6,6 +6,7 @@ export type MarketCardProps = {
   name: string;
   creator: string;
   price: string;
+  fdv: string;
   volume: string;
   change: string;
   imageUrl?: string;
@@ -41,10 +42,11 @@ export function MarketCard(props: MarketCardProps) {
           <dd>{props.price} HOODIE</dd>
         </div>
         <div>
-          <dt>Recent volume</dt>
-          <dd>{props.volume}</dd>
+          <dt>Market cap (FDV)</dt>
+          <dd>{props.fdv}</dd>
         </div>
       </dl>
+      <p className="market-card-volume">Volume {props.volume}</p>
       <div className="market-live-row">
         <span className={`market-live-dot${props.active ? " is-active" : ""}`} />
         <strong>{props.active ? "Market active" : "Awaiting first trade"}</strong>

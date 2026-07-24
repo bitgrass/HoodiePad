@@ -154,6 +154,7 @@ button { color: inherit; }
 .market-stats div { min-width: 0; }
 .market-stats dt { color: var(--muted); font: 700 9px/1 "Courier New", monospace; text-transform: uppercase; letter-spacing: .08em; }
 .market-stats dd { margin: 7px 0 0; overflow: hidden; text-overflow: ellipsis; font-size: 13px; font-weight: 800; white-space: nowrap; }
+.market-card-volume { margin: -8px 0 16px; color: var(--muted); font: 800 8px/1 "Courier New", monospace; text-transform: uppercase; }
 .progress-meta { display: flex; justify-content: space-between; color: var(--muted); font-size: 11px; }
 .progress-meta strong { color: var(--ink); }
 .progress-track { height: 9px; margin-top: 8px; overflow: hidden; border: 1.5px solid var(--ink); border-radius: 99px; background: #ded7c8; }
@@ -408,7 +409,7 @@ button { color: inherit; }
 .chart-empty { min-height: 260px; padding: 30px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
 .chart-empty strong { font-size: 22px; }
 .chart-empty p { max-width: 430px; margin: 8px 0 0; color: var(--muted); font-size: 11px; }
-.chart-metrics { display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid #d5ccbd; background: rgba(255,253,247,.92); }
+.chart-metrics { display: grid; grid-template-columns: repeat(5, 1fr); border-top: 1px solid #d5ccbd; background: rgba(255,253,247,.92); }
 .chart-metrics div { padding: 13px; border-right: 1px solid #d5ccbd; }
 .chart-metrics div:last-child { border-right: 0; }
 .chart-metrics span, .chart-metrics strong { display: block; }
@@ -459,6 +460,23 @@ button { color: inherit; }
 .market-info span, .market-info strong { padding: 13px; }
 .market-info span { color: var(--muted); font-size: 9px; border-bottom: 1px solid #cbc4b7; }
 .market-info strong { font-size: 12px; }
+.market-activity { padding-bottom: 100px; }
+.market-activity-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 22px; margin-bottom: 18px; }
+.market-activity-head h2 { margin: 10px 0 0; font-size: 38px; letter-spacing: -.05em; }
+.activity-tabs { padding: 4px; display: flex; border: 1.5px solid var(--ink); border-radius: 999px; background: #e8e1d5; }
+.activity-tabs button { min-width: 112px; height: 38px; padding: 0 15px; border: 0; border-radius: 999px; background: transparent; font-size: 10px; font-weight: 850; cursor: pointer; }
+.activity-tabs button.is-active { background: var(--acid); box-shadow: 1px 1px 0 var(--ink); }
+.activity-table { border: 2px solid var(--ink); border-radius: 15px; overflow-x: auto; background: var(--paper); box-shadow: 5px 5px 0 var(--ink); }
+.activity-row { min-width: 860px; min-height: 54px; padding: 0 18px; display: grid; grid-template-columns: 1.25fr .6fr 1fr 1fr 1fr 1fr; align-items: center; gap: 14px; border-bottom: 1px solid #d5ccbd; color: inherit; font-size: 10px; text-decoration: none; }
+.activity-row:last-child { border-bottom: 0; }
+.activity-row:not(.activity-row-head):hover { background: var(--acid-soft); }
+.activity-row-head { min-height: 38px; background: #e8e1d5; color: var(--muted); font: 800 8px/1 "Courier New", monospace; text-transform: uppercase; }
+.activity-row code { font-size: 9px; }
+.trade-side { width: fit-content; padding: 5px 8px; border-radius: 999px; font-size: 9px; text-transform: uppercase; }
+.trade-side.buy { background: var(--acid-soft); color: #3f5b1e; }
+.trade-side.sell { background: #ffe2da; color: #9e301e; }
+.holder-table .activity-row { min-width: 650px; grid-template-columns: .5fr 1.5fr 1.5fr 1fr; }
+.activity-empty { min-height: 180px; padding: 40px; display: grid; place-items: center; border: 2px dashed #978f82; border-radius: 15px; color: var(--muted); background: rgba(255,253,247,.55); text-align: center; }
 .analytics-overview { margin-top: 68px; padding: 34px; border: 2px solid var(--ink); border-radius: 22px; background: var(--paper); box-shadow: 7px 7px 0 var(--ink); }
 .analytics-overview-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 30px; }
 .analytics-overview-head h1 { margin: 14px 0 8px; font-size: clamp(46px, 6vw, 78px); letter-spacing: -.07em; }
@@ -554,9 +572,14 @@ button { color: inherit; }
   .form-actions .button { width: 100%; }
   .token-identity { flex-wrap: wrap; }
   .token-identity .status-chip { margin-left: 0; }
+  .price-row { align-items: flex-start; flex-direction: column; gap: 18px; }
+  .chart-metrics { grid-template-columns: repeat(2, 1fr); }
   .token-stat-row, .market-info > div { grid-template-columns: repeat(2, 1fr); }
   .token-stat-row div:nth-child(2) { border-right: 0; }
   .token-stat-row div:nth-child(-n+2) { border-bottom: 1px solid #c9c1b5; }
+  .market-activity-head { align-items: flex-start; flex-direction: column; }
+  .activity-tabs { width: 100%; }
+  .activity-tabs button { flex: 1; min-width: 0; }
   .analytics-overview { margin-top: 34px; padding: 24px; }
   .analytics-overview-head { flex-direction: column; }
   .analytics-overview-head h1 { font-size: 50px; }

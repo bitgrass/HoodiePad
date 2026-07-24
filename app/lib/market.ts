@@ -56,6 +56,7 @@ export type HoodiePadMarket = {
   hasSwapActivity: boolean;
   tick: number;
   hoodiePerToken: string;
+  fdvHoodie: string;
   maxBalance: string;
   maxBalanceRaw: string;
   balanceLimitEnd: number;
@@ -85,6 +86,14 @@ function formatPrice(value: number) {
   if (value < 0.000001) return value.toExponential(4);
   return new Intl.NumberFormat("en-US", {
     maximumFractionDigits: value < 1 ? 8 : 4,
+  }).format(value);
+}
+
+function formatCompactValue(value: number) {
+  if (!Number.isFinite(value) || value <= 0) return "Unavailable";
+  return new Intl.NumberFormat("en-US", {
+    notation: value >= 1_000_000 ? "compact" : "standard",
+    maximumFractionDigits: 2,
   }).format(value);
 }
 
@@ -179,6 +188,8 @@ export async function readHoodiePadMarket(
 
   const metadata = await readHoodiePadMetadata(tokenUri);
   const hoodiePerToken = Math.pow(1.0001, Number(slot0[1]));
+  const fdvHoodie =
+    hoodiePerToken * Number(formatUnits(totalSupply, decimals));
   const official =
     isSameAddress(assetData[0], product.contracts.hoodie) &&
     isSameAddress(assetData[3], product.contracts.noOpMigrator) &&
@@ -212,6 +223,7 @@ export async function readHoodiePadMarket(
     hasSwapActivity: feeGrowthToken > 0n || feeGrowthHoodie > 0n,
     tick: Number(slot0[1]),
     hoodiePerToken: formatPrice(hoodiePerToken),
+    fdvHoodie: formatCompactValue(fdvHoodie),
     maxBalance: formatUnits(maxBalance, decimals),
     maxBalanceRaw: maxBalance.toString(),
     balanceLimitEnd: Number(balanceLimitEnd),

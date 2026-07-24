@@ -9,6 +9,11 @@ export const metadata: Metadata = {
   },
   description:
     "Launch fixed-supply token markets paired with HOODIE. No presale, no migration, and creators keep 80% of canonical-pool fees.",
+  icons: {
+    icon: [{ url: "/hoodie-logo.jpg", type: "image/jpeg" }],
+    shortcut: "/hoodie-logo.jpg",
+    apple: "/hoodie-logo.jpg",
+  },
   openGraph: {
     title: "HoodiePad — Launch markets. Keep 80%.",
     description:

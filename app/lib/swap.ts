@@ -3,9 +3,7 @@ import {
   getAddresses,
 } from "@whetstone-research/doppler-sdk/evm";
 import {
-  encodeAbiParameters,
   encodeFunctionData,
-  encodePacked,
   formatUnits,
   getAddress,
   parseAbi,
@@ -25,18 +23,15 @@ const erc20Abi = parseAbi([
   "function allowance(address owner,address spender) view returns (uint256)",
   "function approve(address spender,uint256 amount) returns (bool)",
 ]);
-const permit2Abi = parseAbi([
-  "function allowance(address owner,address token,address spender) view returns (uint160 amount,uint48 expiration,uint48 nonce)",
-  "function approve(address token,address spender,uint160 amount,uint48 expiration)",
-]);
-const universalRouterAbi = parseAbi([
-  "function execute(bytes commands,bytes[] inputs,uint256 deadline) payable",
+const swapRouter02Abi = parseAbi([
+  "function exactInputSingle((address tokenIn,address tokenOut,uint24 fee,address recipient,uint256 amountIn,uint256 amountOutMinimum,uint160 sqrtPriceLimitX96) params) payable returns (uint256 amountOut)",
+  "function multicall(uint256 deadline,bytes[] data) payable returns (bytes[] results)",
 ]);
 
 export type SwapSide = "buy" | "sell";
 
 export type PreparedWalletTransaction = {
-  kind: "token-approval" | "permit2-approval" | "swap";
+  kind: "token-approval" | "swap";
   label: string;
   from: Address;
   to: Address;
@@ -92,7 +87,6 @@ export class SwapPreparationError extends Error {
 
 function isQuoterRevert(error: unknown) {
   return error instanceof Error &&
-    error.message.includes("quoteExactInputSingle") &&
     error.message.toLowerCase().includes("revert");
 }
 
@@ -126,24 +120,23 @@ export function encodeV3ExactInputSwap(input: {
   fee: number;
   deadline: bigint;
 }) {
-  const path = encodePacked(
-    ["address", "uint24", "address"],
-    [input.tokenIn, input.fee, input.tokenOut],
-  );
-  const commandInput = encodeAbiParameters(
-    [
-      { type: "address" },
-      { type: "uint256" },
-      { type: "uint256" },
-      { type: "bytes" },
-      { type: "bool" },
-    ],
-    [input.recipient, input.amountIn, input.minimumOut, path, true],
-  );
+  const exactInput = encodeFunctionData({
+    abi: swapRouter02Abi,
+    functionName: "exactInputSingle",
+    args: [{
+      tokenIn: input.tokenIn,
+      tokenOut: input.tokenOut,
+      fee: input.fee,
+      recipient: input.recipient,
+      amountIn: input.amountIn,
+      amountOutMinimum: input.minimumOut,
+      sqrtPriceLimitX96: 0n,
+    }],
+  });
   return encodeFunctionData({
-    abi: universalRouterAbi,
-    functionName: "execute",
-    args: ["0x00", [commandInput], input.deadline],
+    abi: swapRouter02Abi,
+    functionName: "multicall",
+    args: [input.deadline, [exactInput]],
   });
 }
 
@@ -181,12 +174,9 @@ export async function prepareHoodiePadSwap(input: {
   }
 
   const addresses = getAddresses(ROBINHOOD_CHAIN_ID);
-  const universalRouter = getAddress(product.contracts.uniswapUniversalRouter);
-  const permit2 = getAddress(product.contracts.permit2);
+  const swapRouter = getAddress(product.contracts.uniswapSwapRouter02);
   if (
-    addresses.v3Quoter.toLowerCase() !== product.contracts.uniswapV3Quoter.toLowerCase() ||
-    addresses.universalRouter.toLowerCase() !== universalRouter.toLowerCase() ||
-    addresses.permit2.toLowerCase() !== permit2.toLowerCase()
+    addresses.v3Quoter.toLowerCase() !== product.contracts.uniswapV3Quoter.toLowerCase()
   ) {
     throw new Error("Pinned swap dependency addresses do not match the HoodiePad configuration");
   }
@@ -195,7 +185,7 @@ export async function prepareHoodiePadSwap(input: {
     publicClient: client,
     chainId: ROBINHOOD_CHAIN_ID,
   });
-  const [inputBalance, childBalance, tokenAllowance, permitAllowance] =
+  const [inputBalance, childBalance, tokenAllowance] =
     await Promise.all([
       client.readContract({
         address: inputToken,
@@ -213,13 +203,7 @@ export async function prepareHoodiePadSwap(input: {
         address: inputToken,
         abi: erc20Abi,
         functionName: "allowance",
-        args: [account, permit2],
-      }),
-      client.readContract({
-        address: permit2,
-        abi: permit2Abi,
-        functionName: "allowance",
-        args: [account, inputToken, universalRouter],
+        args: [account, swapRouter],
       }),
     ]);
 
@@ -340,7 +324,6 @@ export async function prepareHoodiePadSwap(input: {
       : null;
   const now = Math.floor(Date.now() / 1000);
   const deadline = BigInt(now + 20 * 60);
-  const permitExpiration = now + 30 * 60;
   const approvalTransactions: PreparedWalletTransaction[] = [];
 
   if (tokenAllowance < amountIn) {
@@ -352,21 +335,7 @@ export async function prepareHoodiePadSwap(input: {
       data: encodeFunctionData({
         abi: erc20Abi,
         functionName: "approve",
-        args: [permit2, amountIn],
-      }),
-      value: "0x0",
-    });
-  }
-  if (permitAllowance[0] < amountIn || Number(permitAllowance[1]) < now + 20 * 60) {
-    approvalTransactions.push({
-      kind: "permit2-approval",
-      label: `Authorize exact ${inputSymbol} input for this swap`,
-      from: account,
-      to: permit2,
-      data: encodeFunctionData({
-        abi: permit2Abi,
-        functionName: "approve",
-        args: [inputToken, universalRouter, amountIn, permitExpiration],
+        args: [swapRouter, amountIn],
       }),
       value: "0x0",
     });
@@ -383,16 +352,24 @@ export async function prepareHoodiePadSwap(input: {
   });
   let swapTransaction: PreparedWalletTransaction | null = null;
   if (approvalTransactions.length === 0) {
-    const gasEstimate = await client.estimateGas({
-      account,
-      to: universalRouter,
-      data: swapData,
-    });
+    let gasEstimate: bigint;
+    try {
+      gasEstimate = await client.estimateGas({
+        account,
+        to: swapRouter,
+        data: swapData,
+      });
+    } catch {
+      throw new SwapPreparationError(
+        "The direct Uniswap V3 swap did not simulate. Try a smaller amount or use the canonical pool link.",
+        { code: "QUOTE_UNAVAILABLE", inputSymbol },
+      );
+    }
     swapTransaction = {
       kind: "swap",
       label: `Swap ${inputSymbol} for ${outputSymbol}`,
       from: account,
-      to: universalRouter,
+      to: swapRouter,
       data: swapData,
       gasLimit: (gasEstimate * 120n / 100n).toString(),
       value: "0x0",

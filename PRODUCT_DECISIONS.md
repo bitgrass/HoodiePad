@@ -40,8 +40,9 @@ This file is authoritative for HoodiePad V1. Changes to a frozen value require a
 | Deployment authorization | Exact simulation, passing fork report, external review or explicit owner risk waiver, policy switch, then explicit MetaMask confirmation |
 | Metadata | HoodiePad generates the immutable production metadata URI |
 | Market registry | Canonical Airlock `Create` events, then full HoodiePad invariant validation |
-| Market chart | Canonical V3 `Swap` events; no generated price series |
-| In-app trading | Exact-input Doppler V3 quote, exact-amount Permit2 approval, simulated Universal Router swap, connected MetaMask confirmation |
+| Market chart | Canonical V3 `Swap` topic decoded with HoodiePad's pinned event ABI; no generated price series |
+| Market activity | Canonical V3 swaps plus ERC-20 transfer-derived wallet holders |
+| In-app trading | Exact-input canonical V3 quote, exact-amount ERC-20 approval, direct official `SwapRouter02` execution, connected MetaMask confirmation |
 | Base | Out of scope |
 
 ## Required launch blockers

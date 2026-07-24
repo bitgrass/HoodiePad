@@ -4,7 +4,6 @@ import { tmpdir } from "node:os";
 import { join, resolve, sep } from "node:path";
 import test from "node:test";
 import {
-  decodeAbiParameters,
   decodeFunctionData,
   getAddress,
   parseAbi,
@@ -217,27 +216,25 @@ test("encodes an exact-input HoodiePad V3 swap with recipient and slippage prote
     deadline: 1_800_000_000n,
   });
   const decoded = decodeFunctionData({
-    abi: parseAbi(["function execute(bytes commands,bytes[] inputs,uint256 deadline) payable"]),
+    abi: parseAbi(["function multicall(uint256 deadline,bytes[] data) payable returns (bytes[] results)"]),
     data,
   });
-  assert.equal(decoded.functionName, "execute");
-  assert.equal(decoded.args[0], "0x00");
-  assert.equal(decoded.args[2], 1_800_000_000n);
-  const command = decodeAbiParameters(
-    [
-      { type: "address" },
-      { type: "uint256" },
-      { type: "uint256" },
-      { type: "bytes" },
-      { type: "bool" },
-    ],
-    decoded.args[1][0],
-  );
-  assert.equal(command[0], recipient);
-  assert.equal(command[1], 1_000_000n);
-  assert.equal(command[2], 9_000_000n);
-  assert.match(command[3], new RegExp(`^${hoodie.toLowerCase()}002710${child.slice(2).toLowerCase()}$`));
-  assert.equal(command[4], true);
+  assert.equal(decoded.functionName, "multicall");
+  assert.equal(decoded.args[0], 1_800_000_000n);
+  const exactInput = decodeFunctionData({
+    abi: parseAbi([
+      "function exactInputSingle((address tokenIn,address tokenOut,uint24 fee,address recipient,uint256 amountIn,uint256 amountOutMinimum,uint160 sqrtPriceLimitX96) params) payable returns (uint256 amountOut)",
+    ]),
+    data: decoded.args[1][0],
+  });
+  assert.equal(exactInput.functionName, "exactInputSingle");
+  assert.equal(exactInput.args[0].tokenIn, hoodie);
+  assert.equal(exactInput.args[0].tokenOut, child);
+  assert.equal(exactInput.args[0].fee, 10_000);
+  assert.equal(exactInput.args[0].recipient, recipient);
+  assert.equal(exactInput.args[0].amountIn, 1_000_000n);
+  assert.equal(exactInput.args[0].amountOutMinimum, 9_000_000n);
+  assert.equal(exactInput.args[0].sqrtPriceLimitX96, 0n);
 });
 
 test("prevents oversized buys before invoking the V3 quoter during the 2% wallet window", () => {

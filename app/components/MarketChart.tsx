@@ -13,11 +13,13 @@ type ChartPoint = {
 
 type ChartData = {
   currentPrice: string;
+  fdvHoodie: string;
   points: ChartPoint[];
   swapCount: number;
   hoodieVolume: string;
   changePercent: number | null;
   latestBlock: string | null;
+  holderCount: number;
 };
 
 function chartPath(points: ChartPoint[]) {
@@ -118,7 +120,8 @@ export function MarketChart({
               : `${change > 0 ? "+" : ""}${change.toFixed(2)}%`}
           </strong>
         </div>
-        <div><span>Last swap block</span><strong>{data?.latestBlock ?? "—"}</strong></div>
+        <div><span>Market cap (FDV)</span><strong>{data ? `${data.fdvHoodie} HOODIE` : "—"}</strong></div>
+        <div><span>Wallet holders</span><strong>{data?.holderCount ?? "—"}</strong></div>
       </div>
     </div>
   );
