@@ -22,7 +22,18 @@ Do not configure a private key or server signer.
 
 ## Launch enablement prerequisites
 
-1. Install and lock the exact reviewed SDK and optional router versions.
+1. Install and lock the exact reviewed SDK and router versions. Robinhood's
+   deployed Universal Router is version `2.1.1`. Its verified V4 command ABI
+   defines `ExactInputSingleParams` as:
+
+   ```text
+   PoolKey, zeroForOne, amountIn, amountOutMinimum, minHopPriceX36, hookData
+   ```
+
+   Encode the complete struct as one dynamic ABI tuple. HoodiePad sets
+   `minHopPriceX36` to zero and applies its exact quote bound through
+   `amountOutMinimum`. Omitting the field shifts the dynamic `hookData` offset
+   and causes the deployed router to pass malformed calldata into the swap.
 2. Keep `HOODIEPAD_BROADCAST_ENABLED=false`.
 3. Generate the read-only runtime proposal:
 
@@ -43,6 +54,10 @@ Do not configure a private key or server signer.
    pass every name in `REQUIRED_V4_CALIBRATION_CHECKS`, including the exact
    launch, direct HOODIE swaps, ETH multihop swaps, wallet-limit expiry,
    slippage/deadline rejection, PoolManager Swap indexing, and 80/15/5 claims.
+   Fee evidence comes from the initializer's simulated and executed
+   `collectFees` calls plus beneficiary token-balance deltas. Calibration does
+   not depend on an unreviewed Multicall3 deployment merely to preview the same
+   claim.
 7. Obtain independent external review.
 8. Run `npm run verify:robinhood:v4`.
 9. Run `npm run verify:release` with broadcast still disabled.

@@ -10,6 +10,7 @@ import {
   encodeFunctionData,
   formatUnits,
   getAddress,
+  maxUint256,
   parseAbi,
   parseAbiParameters,
   parseUnits,
@@ -49,14 +50,15 @@ const universalRouterAbi = parseAbi([
 const v4RouterInputParameters = parseAbiParameters(
   "bytes actions,bytes[] params",
 );
+// Robinhood uses Universal Router 2.1.1. Each swap action takes one dynamic
+// struct, so its payload must begin with the ABI tuple offset (0x20). The
+// deployed router also includes the v2.1.1 per-hop price fields; keep these
+// layouts aligned with the reviewed runtime snapshot.
 const v4ExactInputSingleParameters = parseAbiParameters(
-  "(address currency0,address currency1,uint24 fee,int24 tickSpacing,address hooks) poolKey,bool zeroForOne,uint128 amountIn,uint128 amountOutMinimum,uint256 minHopPriceX36,bytes hookData",
-);
-const v4ExactOutputSingleParameters = parseAbiParameters(
-  "(address currency0,address currency1,uint24 fee,int24 tickSpacing,address hooks) poolKey,bool zeroForOne,uint128 amountOut,uint128 amountInMaximum,uint256 minHopPriceX36,bytes hookData",
+  "((address currency0,address currency1,uint24 fee,int24 tickSpacing,address hooks) poolKey,bool zeroForOne,uint128 amountIn,uint128 amountOutMinimum,uint256 minHopPriceX36,bytes hookData) swap",
 );
 const v4ExactInputParameters = parseAbiParameters(
-  "address currencyIn,(address intermediateCurrency,uint24 fee,int24 tickSpacing,address hooks,bytes hookData)[] path,uint256[] minHopPriceX36,uint128 amountIn,uint128 amountOutMinimum",
+  "(address currencyIn,(address intermediateCurrency,uint24 fee,int24 tickSpacing,address hooks,bytes hookData)[] path,uint256[] minHopPriceX36,uint128 amountIn,uint128 amountOutMinimum) swap",
 );
 const v4SettleAllParameters = parseAbiParameters(
   "address currency,uint256 maxAmount",
@@ -79,7 +81,6 @@ const UNIVERSAL_ROUTER_WRAP_ETH = "0x0b" as Hex;
 const UNIVERSAL_ROUTER_UNWRAP_WETH = "0x0c" as Hex;
 const V4_ACTION_SWAP_EXACT_IN_SINGLE = "0x06" as Hex;
 const V4_ACTION_SWAP_EXACT_IN = "0x07" as Hex;
-const V4_ACTION_SWAP_EXACT_OUT_SINGLE = "0x08" as Hex;
 const V4_ACTION_SETTLE = "0x0b" as Hex;
 const V4_ACTION_SETTLE_ALL = "0x0c" as Hex;
 const V4_ACTION_TAKE = "0x0e" as Hex;
@@ -268,20 +269,22 @@ export function encodeV4ExactInputSwap(input: {
   ]);
   const actionInputs = [
     encodeAbiParameters(v4ExactInputSingleParameters, [
-      poolKeyTuple(input.poolKey),
-      zeroForOne,
-      input.amountIn,
-      input.minimumOut,
-      0n,
-      "0x",
+      {
+        poolKey: poolKeyTuple(input.poolKey),
+        zeroForOne,
+        amountIn: input.amountIn,
+        amountOutMinimum: input.minimumOut,
+        minHopPriceX36: 0n,
+        hookData: "0x",
+      },
     ]),
     encodeAbiParameters(v4SettleAllParameters, [
       getAddress(input.tokenIn),
-      input.amountIn,
+      maxUint256,
     ]),
     encodeAbiParameters(v4TakeAllParameters, [
       getAddress(input.tokenOut),
-      input.minimumOut,
+      0n,
     ]),
   ];
   const v4Input = encodeAbiParameters(v4RouterInputParameters, [
@@ -292,57 +295,6 @@ export function encodeV4ExactInputSwap(input: {
     abi: universalRouterAbi,
     functionName: "execute",
     args: [UNIVERSAL_ROUTER_V4_SWAP, [v4Input], input.deadline],
-  });
-}
-
-export function encodeV4ExactOutputSwap(input: {
-  poolKey: V4PoolKey;
-  tokenIn: Address;
-  tokenOut: Address;
-  amountOut: bigint;
-  maximumIn: bigint;
-  deadline: bigint;
-}) {
-  const currency0 = getAddress(input.poolKey.currency0);
-  const zeroForOne =
-    getAddress(input.tokenIn).toLowerCase() === currency0.toLowerCase();
-  const expectedOutput = zeroForOne
-    ? getAddress(input.poolKey.currency1)
-    : currency0;
-  if (expectedOutput.toLowerCase() !== getAddress(input.tokenOut).toLowerCase()) {
-    throw new Error("V4 PoolKey does not match the requested swap direction");
-  }
-  const actions = concatHex([
-    V4_ACTION_SWAP_EXACT_OUT_SINGLE,
-    V4_ACTION_SETTLE_ALL,
-    V4_ACTION_TAKE_ALL,
-  ]);
-  const actionInputs = [
-    encodeAbiParameters(v4ExactOutputSingleParameters, [
-      poolKeyTuple(input.poolKey),
-      zeroForOne,
-      input.amountOut,
-      input.maximumIn,
-      0n,
-      "0x",
-    ]),
-    encodeAbiParameters(v4SettleAllParameters, [
-      getAddress(input.tokenIn),
-      input.maximumIn,
-    ]),
-    encodeAbiParameters(v4TakeAllParameters, [
-      getAddress(input.tokenOut),
-      input.amountOut,
-    ]),
-  ];
-  return encodeFunctionData({
-    abi: universalRouterAbi,
-    functionName: "execute",
-    args: [
-      UNIVERSAL_ROUTER_V4_SWAP,
-      [encodeAbiParameters(v4RouterInputParameters, [actions, actionInputs])],
-      input.deadline,
-    ],
   });
 }
 
@@ -377,11 +329,13 @@ export function encodeV4EthToChildSwap(input: {
     actions,
     [
       encodeAbiParameters(v4ExactInputParameters, [
-        weth,
-        path,
-        [],
-        input.amountIn,
-        input.minimumOut,
+        {
+          currencyIn: weth,
+          path,
+          minHopPriceX36: [],
+          amountIn: input.amountIn,
+          amountOutMinimum: input.minimumOut,
+        },
       ]),
       encodeAbiParameters(v4SettleParameters, [
         weth,
@@ -390,7 +344,7 @@ export function encodeV4EthToChildSwap(input: {
       ]),
       encodeAbiParameters(v4TakeAllParameters, [
         child,
-        input.minimumOut,
+        0n,
       ]),
     ],
   ]);
@@ -437,15 +391,17 @@ export function encodeV4ChildToEthSwap(input: {
     actions,
     [
       encodeAbiParameters(v4ExactInputParameters, [
-        child,
-        path,
-        [],
-        input.amountIn,
-        input.minimumOut,
+        {
+          currencyIn: child,
+          path,
+          minHopPriceX36: [],
+          amountIn: input.amountIn,
+          amountOutMinimum: input.minimumOut,
+        },
       ]),
       encodeAbiParameters(v4SettleAllParameters, [
         child,
-        input.amountIn,
+        maxUint256,
       ]),
       encodeAbiParameters(v4TakeParameters, [
         weth,

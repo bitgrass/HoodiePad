@@ -7,6 +7,7 @@ import {
   decodeAbiParameters,
   decodeFunctionData,
   getAddress,
+  maxUint256,
   parseAbi,
   parseAbiParameters,
 } from "viem";
@@ -26,7 +27,6 @@ import {
   encodeV4ChildToEthSwap,
   encodeV4EthToChildSwap,
   encodeV4ExactInputSwap,
-  encodeV4ExactOutputSwap,
   encodeV3ExactInputSwap,
   estimateMaxInputAtSpot,
   routerDeploymentMatches,
@@ -279,6 +279,18 @@ const universalRouterExecuteAbi = parseAbi([
 const v4RouterInputParameters = parseAbiParameters(
   "bytes actions,bytes[] params",
 );
+const v4ExactInputSingleParameters = parseAbiParameters(
+  "((address currency0,address currency1,uint24 fee,int24 tickSpacing,address hooks) poolKey,bool zeroForOne,uint128 amountIn,uint128 amountOutMinimum,uint256 minHopPriceX36,bytes hookData) swap",
+);
+const v4ExactInputParameters = parseAbiParameters(
+  "(address currencyIn,(address intermediateCurrency,uint24 fee,int24 tickSpacing,address hooks,bytes hookData)[] path,uint256[] minHopPriceX36,uint128 amountIn,uint128 amountOutMinimum) swap",
+);
+const v4SettleAllParameters = parseAbiParameters(
+  "address currency,uint256 maxAmount",
+);
+const v4TakeAllParameters = parseAbiParameters(
+  "address currency,uint256 minAmount",
+);
 
 function v4PoolKeys() {
   const weth = getAddress("0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73");
@@ -306,7 +318,7 @@ function v4PoolKeys() {
   };
 }
 
-test("encodes bounded direct V4 exact-input and exact-output swaps", () => {
+test("encodes a bounded direct V4 exact-input swap", () => {
   const { hoodie, child, childPoolKey } = v4PoolKeys();
   const exactInput = decodeFunctionData({
     abi: universalRouterExecuteAbi,
@@ -327,25 +339,31 @@ test("encodes bounded direct V4 exact-input and exact-output swaps", () => {
   );
   assert.equal(inputActions, "0x060c0f");
   assert.equal(inputParams.length, 3);
-
-  const exactOutput = decodeFunctionData({
-    abi: universalRouterExecuteAbi,
-    data: encodeV4ExactOutputSwap({
-      poolKey: childPoolKey,
-      tokenIn: hoodie,
-      tokenOut: child,
-      amountOut: 900n,
-      maximumIn: 1_000n,
-      deadline: 1_800_000_000n,
-    }),
-  });
-  assert.equal(exactOutput.args[0], "0x10");
-  const [outputActions, outputParams] = decodeAbiParameters(
-    v4RouterInputParameters,
-    exactOutput.args[1][0],
+  assert.equal(BigInt(inputParams[0].slice(0, 66)), 32n);
+  const [decodedSwap] = decodeAbiParameters(
+    v4ExactInputSingleParameters,
+    inputParams[0],
   );
-  assert.equal(outputActions, "0x080c0f");
-  assert.equal(outputParams.length, 3);
+  assert.deepEqual(decodedSwap.poolKey, {
+    currency0: childPoolKey.currency0,
+    currency1: childPoolKey.currency1,
+    fee: childPoolKey.fee,
+    tickSpacing: childPoolKey.tickSpacing,
+    hooks: childPoolKey.hooks,
+  });
+  assert.equal(decodedSwap.zeroForOne, true);
+  assert.equal(decodedSwap.amountIn, 1_000n);
+  assert.equal(decodedSwap.amountOutMinimum, 900n);
+  assert.equal(decodedSwap.minHopPriceX36, 0n);
+  assert.equal(decodedSwap.hookData, "0x");
+  assert.deepEqual(
+    decodeAbiParameters(v4SettleAllParameters, inputParams[1]),
+    [hoodie, maxUint256],
+  );
+  assert.deepEqual(
+    decodeAbiParameters(v4TakeAllParameters, inputParams[2]),
+    [child, 0n],
+  );
 });
 
 test("encodes atomic ETH-to-child and child-to-ETH V4 multihop routes", () => {
@@ -377,6 +395,31 @@ test("encodes atomic ETH-to-child and child-to-ETH V4 multihop routes", () => {
   );
   assert.equal(buyActions, "0x070b0f");
   assert.equal(buyParams.length, 3);
+  assert.equal(BigInt(buyParams[0].slice(0, 66)), 32n);
+  const [decodedBuySwap] = decodeAbiParameters(
+    v4ExactInputParameters,
+    buyParams[0],
+  );
+  assert.equal(decodedBuySwap.currencyIn, weth);
+  assert.deepEqual(decodedBuySwap.path, [
+    {
+      intermediateCurrency: hoodie,
+      fee: referencePoolKey.fee,
+      tickSpacing: referencePoolKey.tickSpacing,
+      hooks: referencePoolKey.hooks,
+      hookData: "0x",
+    },
+    {
+      intermediateCurrency: child,
+      fee: childPoolKey.fee,
+      tickSpacing: childPoolKey.tickSpacing,
+      hooks: childPoolKey.hooks,
+      hookData: "0x",
+    },
+  ]);
+  assert.deepEqual(decodedBuySwap.minHopPriceX36, []);
+  assert.equal(decodedBuySwap.amountIn, 1_000n);
+  assert.equal(decodedBuySwap.amountOutMinimum, 900n);
 
   const sell = decodeFunctionData({
     abi: universalRouterExecuteAbi,
@@ -399,6 +442,31 @@ test("encodes atomic ETH-to-child and child-to-ETH V4 multihop routes", () => {
   );
   assert.equal(sellActions, "0x070c0e");
   assert.equal(sellParams.length, 3);
+  assert.equal(BigInt(sellParams[0].slice(0, 66)), 32n);
+  const [decodedSellSwap] = decodeAbiParameters(
+    v4ExactInputParameters,
+    sellParams[0],
+  );
+  assert.equal(decodedSellSwap.currencyIn, child);
+  assert.deepEqual(decodedSellSwap.path, [
+    {
+      intermediateCurrency: hoodie,
+      fee: childPoolKey.fee,
+      tickSpacing: childPoolKey.tickSpacing,
+      hooks: childPoolKey.hooks,
+      hookData: "0x",
+    },
+    {
+      intermediateCurrency: weth,
+      fee: referencePoolKey.fee,
+      tickSpacing: referencePoolKey.tickSpacing,
+      hooks: referencePoolKey.hooks,
+      hookData: "0x",
+    },
+  ]);
+  assert.deepEqual(decodedSellSwap.minHopPriceX36, []);
+  assert.equal(decodedSellSwap.amountIn, 900n);
+  assert.equal(decodedSellSwap.amountOutMinimum, 800n);
 });
 
 test("pins the verified Robinhood SwapRouter02 instead of the V2 factory", async () => {

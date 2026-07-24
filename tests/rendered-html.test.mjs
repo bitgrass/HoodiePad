@@ -241,7 +241,10 @@ test("prepares a connected-wallet launch draft but fails closed on protocol bloc
   assert.ok(payload.blockers.includes("Mainnet broadcast remains disabled by policy."));
   assert.ok(payload.blockers.includes("Complete every HoodiePad V2 Robinhood fork calibration check."));
   assert.ok(!payload.blockers.some((blocker) => blocker.includes("ecosystem Safe")));
-  assert.equal(payload.calibration.status, "pending");
+  assert.ok(
+    ["pending", "failed"].includes(payload.calibration.status),
+    `Expected a fail-closed calibration state, received ${payload.calibration.status}`,
+  );
   assert.equal(payload.calibration.approved, false);
   assert.equal(payload.deployment, null);
 

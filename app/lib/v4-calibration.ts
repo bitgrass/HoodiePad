@@ -9,6 +9,7 @@ export const REQUIRED_V4_CALIBRATION_CHECKS = [
   "module-whitelisting",
   "hoodie-reference-pool-key",
   "hoodie-reference-pool-id",
+  "uniswap-v4-router-control",
   "eth-usd-fresh",
   "hoodie-usd-derived",
   "opening-fdv-target",

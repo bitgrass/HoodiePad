@@ -6,25 +6,32 @@ import {
   airlockAbi,
   DEAD_ADDRESS,
   DopplerSDK,
+  dopplerERC20V1Abi,
   dopplerHookInitializerAbi,
+  poolManagerAbi,
   rehypeDopplerHookAbi,
 } from "@whetstone-research/doppler-sdk/evm";
 import {
   createPublicClient,
   createTestClient,
   createWalletClient,
+  decodeErrorResult,
   getAddress,
   http,
   maxUint256,
   parseAbi,
   parseAbiItem,
   parseEther,
+  type Abi,
   type Address,
   type Hex,
   type PublicClient,
   type WalletClient,
 } from "viem";
-import { privateKeyToAccount } from "viem/accounts";
+import {
+  privateKeyToAccount,
+  type PrivateKeyAccount,
+} from "viem/accounts";
 import product from "../config/hoodiepad-v2.json";
 import legacyProduct from "../config/hoodiepad-v1.json";
 import {
@@ -43,7 +50,6 @@ import {
   encodeV4ChildToEthSwap,
   encodeV4EthToChildSwap,
   encodeV4ExactInputSwap,
-  encodeV4ExactOutputSwap,
 } from "../app/lib/swap";
 import {
   calculateFdv,
@@ -96,6 +102,38 @@ const stateViewAbi = parseAbi([
   "function getSlot0(bytes32 poolId) view returns (uint160 sqrtPriceX96,int24 tick,uint24 protocolFee,uint24 lpFee)",
   "function getLiquidity(bytes32 poolId) view returns (uint128 liquidity)",
 ]);
+const universalRouterErrorsAbi = parseAbi([
+  "error ExecutionFailed(uint256 commandIndex,bytes message)",
+  "error TransactionDeadlinePassed()",
+]);
+const v4RouterErrorsAbi = parseAbi([
+  "error V4TooLittleReceived(uint256 minAmountOutReceived,uint256 amountReceived)",
+  "error V4TooMuchRequested(uint256 maxAmountInRequested,uint256 amountRequested)",
+  "error V4TooLittleReceivedPerHop(uint256 hopIndex,uint256 minPrice,uint256 price)",
+  "error V4TooMuchRequestedPerHop(uint256 hopIndex,uint256 minPrice,uint256 price)",
+  "error V4TooLittleReceivedPerHopSingle(uint256 minPrice,uint256 price)",
+  "error V4TooMuchRequestedPerHopSingle(uint256 minPrice,uint256 price)",
+  "error InvalidHopPriceLength()",
+  "error SliceOutOfBounds()",
+  "error UnsupportedAction(uint256 action)",
+]);
+const permit2ErrorsAbi = parseAbi([
+  "error AllowanceExpired(uint256 deadline)",
+  "error InsufficientAllowance(uint256 amount)",
+  "error InvalidAmount(uint160 maxAmount)",
+  "error InvalidNonce()",
+  "error InvalidSigner()",
+  "error LengthMismatch()",
+  "error SignatureExpired(uint256 signatureDeadline)",
+]);
+const knownSwapErrorAbis: readonly Abi[] = [
+  universalRouterErrorsAbi,
+  v4RouterErrorsAbi,
+  dopplerERC20V1Abi,
+  poolManagerAbi,
+  rehypeDopplerHookAbi,
+  permit2ErrorsAbi,
+];
 const swapEvent = parseAbiItem(
   "event Swap(bytes32 indexed id,address indexed sender,int128 amount0,int128 amount1,uint160 sqrtPriceX96,uint128 liquidity,int24 tick,uint24 fee)",
 );
@@ -125,6 +163,233 @@ function redactError(error: unknown) {
     .replace(/https?:\/\/[^\s]+/g, "[redacted RPC]")
     .replace(/alch_[A-Za-z0-9_-]+/g, "[redacted key]")
     .slice(0, 2_500);
+}
+
+function getNestedRevertData(error: unknown): Hex | undefined {
+  const visited = new Set<unknown>();
+  const queue: unknown[] = [error];
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (!current || typeof current !== "object" || visited.has(current)) {
+      continue;
+    }
+    visited.add(current);
+    for (const value of Object.values(current as Record<string, unknown>)) {
+      if (
+        typeof value === "string" &&
+        /^0x[0-9a-fA-F]{8,}$/.test(value)
+      ) {
+        return value as Hex;
+      }
+      if (value && typeof value === "object") queue.push(value);
+    }
+  }
+  return undefined;
+}
+
+function formatErrorArgs(args: readonly unknown[] | undefined) {
+  if (!args || args.length === 0) return "";
+  return args
+    .map((value) =>
+      typeof value === "bigint" ? value.toString() : String(value))
+    .join(", ");
+}
+
+function decodeKnownSwapError(data: Hex | undefined) {
+  if (!data || data === "0x") return undefined;
+  for (const abi of knownSwapErrorAbis) {
+    try {
+      const decoded = decodeErrorResult({ abi, data });
+      return `${decoded.errorName}(${formatErrorArgs(decoded.args)})`;
+    } catch {
+      // Try the next deployed-contract ABI.
+    }
+  }
+  return `selector ${data.slice(0, 10)}`;
+}
+
+interface TraceCallFrame {
+  type?: string;
+  from?: Address;
+  to?: Address;
+  input?: Hex;
+  output?: Hex;
+  error?: string;
+  revertReason?: string;
+  calls?: TraceCallFrame[];
+}
+
+interface StructTraceResult {
+  failed?: boolean;
+  returnValue?: Hex;
+}
+
+interface ParityTraceFrame {
+  action?: {
+    callType?: string;
+    from?: Address;
+    to?: Address;
+    input?: Hex;
+  };
+  error?: string;
+  result?: {
+    output?: Hex;
+  };
+  traceAddress?: number[];
+  type?: string;
+}
+
+async function localRpcRequest<T>(method: string, params: unknown[]) {
+  const response = await fetch(LOCAL_RPC_URL, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method,
+      params,
+    }),
+  });
+  const payload = await response.json() as {
+    result?: T;
+    error?: { code?: number; message?: string };
+  };
+  if (payload.error) {
+    throw new Error(
+      `${method} failed (${payload.error.code ?? "unknown"}): ${
+        payload.error.message ?? "unknown error"
+      }`,
+    );
+  }
+  if (payload.result === undefined) {
+    throw new Error(`${method} returned no result`);
+  }
+  return payload.result;
+}
+
+function traceAddressLabel(
+  address: Address | undefined,
+  additionalLabels: Readonly<Record<string, string>> = {},
+) {
+  if (!address) return "unknown";
+  const normalized = address.toLowerCase();
+  const labels: Record<string, string> = {
+    [product.contracts.uniswapUniversalRouter.toLowerCase()]:
+      "UniversalRouter",
+    [product.contracts.uniswapV4PoolManager.toLowerCase()]: "PoolManager",
+    [product.contracts.permit2.toLowerCase()]: "Permit2",
+    [product.contracts.hoodie.toLowerCase()]: "HOODIE",
+    [product.contracts.dopplerHookInitializer.toLowerCase()]:
+      "DopplerHook",
+    ...additionalLabels,
+  };
+  return labels[normalized] ?? address;
+}
+
+function failedTraceFrames(
+  frame: TraceCallFrame,
+  depth = 0,
+): Array<{ frame: TraceCallFrame; depth: number }> {
+  const nested = (frame.calls ?? []).flatMap((call) =>
+    failedTraceFrames(call, depth + 1));
+  if (frame.error || frame.revertReason) {
+    nested.push({ frame, depth });
+  }
+  return nested;
+}
+
+async function traceRouterCall(input: {
+  from: Address;
+  to: Address;
+  data: Hex;
+  value: bigint;
+  labels?: Readonly<Record<string, string>>;
+}) {
+  const transaction = {
+    from: input.from,
+    to: input.to,
+    data: input.data,
+    value: `0x${input.value.toString(16)}`,
+  };
+  try {
+    const frame = await localRpcRequest<TraceCallFrame>(
+      "debug_traceCall",
+      [
+        transaction,
+        "latest",
+        {
+          tracer: "callTracer",
+          tracerConfig: { onlyTopCall: false, withLog: false },
+        },
+      ],
+    );
+    const failures = failedTraceFrames(frame)
+      .sort((left, right) => right.depth - left.depth)
+      .slice(0, 8);
+    if (failures.length > 0) {
+      return failures
+        .map(({ frame: failure, depth }) => {
+          const decoded = decodeKnownSwapError(failure.output);
+          return [
+            `depth ${depth}`,
+            traceAddressLabel(failure.to, input.labels),
+            failure.error ?? failure.revertReason ?? "reverted",
+            decoded ?? "no revert data",
+          ].join(" · ");
+        })
+        .join(" | ");
+    }
+    return `top-level ${decodeKnownSwapError(frame.output) ?? "revert without data"}`;
+  } catch (callTracerError) {
+    try {
+      const parityTrace = await localRpcRequest<ParityTraceFrame[]>(
+        "trace_call",
+        [transaction, ["trace"], "latest"],
+      );
+      const failures = parityTrace
+        .filter((frame) => frame.error)
+        .sort(
+          (left, right) =>
+            (right.traceAddress?.length ?? 0) -
+            (left.traceAddress?.length ?? 0),
+        )
+        .slice(0, 8);
+      if (failures.length > 0) {
+        return failures
+          .map((failure) => [
+            `depth ${failure.traceAddress?.length ?? 0}`,
+            traceAddressLabel(failure.action?.to, input.labels),
+            failure.error ?? "reverted",
+            decodeKnownSwapError(failure.result?.output) ?? "no revert data",
+          ].join(" · "))
+          .join(" | ");
+      }
+    } catch {
+      // Fall through to the opcode-level geth trace.
+    }
+    try {
+      const trace = await localRpcRequest<StructTraceResult>(
+        "debug_traceCall",
+        [
+          transaction,
+          "latest",
+          {
+            disableMemory: true,
+            disableStorage: true,
+            enableReturnData: true,
+          },
+        ],
+      );
+      return [
+        `geth trace failed=${String(trace.failed)}`,
+        decodeKnownSwapError(trace.returnValue) ?? "no revert data",
+      ].join(" · ");
+    } catch (structTraceError) {
+      return `trace unavailable: ${redactError(callTracerError)}; fallback: ${
+        redactError(structTraceError)
+      }`;
+    }
+  }
 }
 
 async function resolveAnvilExecutable() {
@@ -157,6 +422,7 @@ async function startFork() {
     String(LOCAL_PORT),
     "--block-time",
     "1",
+    "--steps-tracing",
     "--silent",
   ];
   const pinnedBlock = process.env.HOODIEPAD_FORK_BLOCK?.trim();
@@ -248,7 +514,7 @@ async function waitForSuccess(client: PublicClient, hash: Hex) {
 async function approvePermit2(input: {
   client: PublicClient;
   wallet: WalletClient;
-  account: Address;
+  account: PrivateKeyAccount;
   token: Address;
   amount: bigint;
   expiration: number;
@@ -278,18 +544,81 @@ async function approvePermit2(input: {
 async function sendRouterTransaction(input: {
   client: PublicClient;
   wallet: WalletClient;
-  account: Address;
+  account: PrivateKeyAccount;
   data: Hex;
   value?: bigint;
+  labels?: Readonly<Record<string, string>>;
 }) {
+  const router = getAddress(product.contracts.uniswapUniversalRouter);
+  const value = input.value ?? 0n;
+  await simulateRouterTransaction({
+    client: input.client,
+    account: input.account.address,
+    data: input.data,
+    value,
+    labels: input.labels,
+  });
   const hash = await input.wallet.sendTransaction({
     account: input.account,
-    to: getAddress(product.contracts.uniswapUniversalRouter),
+    to: router,
     data: input.data,
-    value: input.value ?? 0n,
+    value,
     chain: robinhood,
   });
   return waitForSuccess(input.client, hash);
+}
+
+async function simulateRouterTransaction(input: {
+  client: PublicClient;
+  account: Address;
+  data: Hex;
+  value?: bigint;
+  labels?: Readonly<Record<string, string>>;
+}) {
+  const router = getAddress(product.contracts.uniswapUniversalRouter);
+  const value = input.value ?? 0n;
+  try {
+    await input.client.call({
+      account: input.account,
+      to: router,
+      data: input.data,
+      value,
+    });
+  } catch (error) {
+    const data = getNestedRevertData(error);
+    if (data) {
+      try {
+        const outer = decodeErrorResult({
+          abi: universalRouterErrorsAbi,
+          data,
+        });
+        if (outer.errorName === "ExecutionFailed") {
+          const [commandIndex, message] = outer.args;
+          const nested = decodeKnownSwapError(message);
+          if (nested) {
+            throw new Error(
+              `Universal Router command ${commandIndex} reverted with ${nested}`,
+            );
+          }
+        }
+      } catch (decodedError) {
+        if (
+          decodedError instanceof Error &&
+          decodedError.message.startsWith("Universal Router command")
+        ) {
+          throw decodedError;
+        }
+      }
+    }
+    const trace = await traceRouterCall({
+      from: input.account,
+      to: router,
+      data: input.data,
+      value,
+      labels: input.labels,
+    });
+    throw new Error(`Universal Router simulation failed. Trace: ${trace}`);
+  }
 }
 
 async function collectForBeneficiary(input: {
@@ -304,11 +633,9 @@ async function collectForBeneficiary(input: {
     chainId: product.network.chainId,
   });
   const pool = await sdk.getMulticurvePool(input.token);
-  const before = await pool.getPendingFees(input.account);
   const result = await pool.collectFees();
   await waitForSuccess(input.client, result.transactionHash);
-  const after = await pool.getPendingFees(input.account);
-  return { before, after };
+  return result;
 }
 
 async function main() {
@@ -389,7 +716,7 @@ async function main() {
       product.contracts.dopplerHookInitializer,
       product.contracts.noOpGovernanceFactory,
       product.contracts.noOpMigrator,
-    ].map(getAddress);
+    ].map((address) => getAddress(address));
     const moduleStates = await Promise.all(
       moduleAddresses.map((module) =>
         publicClient.readContract({
@@ -717,6 +1044,11 @@ async function main() {
 
     const router = getAddress(product.contracts.uniswapUniversalRouter);
     const hoodie = getAddress(product.contracts.hoodie);
+    const weth = getAddress(product.contracts.weth);
+    const swapTraceLabels = {
+      [token.toLowerCase()]: "HoodiePadChildToken",
+      [childPoolKey.hooks.toLowerCase()]: "DopplerHook",
+    };
     const firstTokens = parseEther("10000000");
     const secondTokens = parseEther("11000000");
     const sellTokens = parseEther("1000000");
@@ -734,8 +1066,17 @@ async function main() {
       exactAmount: secondTokens,
       hookData: "0x",
     });
+    const firstInputQuote = await sdk.quoter.quoteExactInputV4Quoter({
+      poolKey: childPoolKey,
+      zeroForOne:
+        hoodie.toLowerCase() === childPoolKey.currency0.toLowerCase(),
+      exactAmount: firstQuote.amountIn,
+      hookData: "0x",
+    });
+    assert.ok(firstInputQuote.amountOut > 0n);
     const fundingAmount =
-      (firstQuote.amountIn + secondQuote.amountIn) * 4n + parseEther("1000000");
+      (firstQuote.amountIn + secondQuote.amountIn) * 4n +
+      parseEther("1000000");
     const poolManager = getAddress(product.contracts.uniswapV4PoolManager);
     await testClient.setBalance({ address: poolManager, value: parseEther("10") });
     await testClient.impersonateAccount({ address: poolManager });
@@ -761,55 +1102,176 @@ async function main() {
     await approvePermit2({
       client: publicClient,
       wallet: buyerWallet,
-      account: buyer.address,
+      account: buyer,
       token: hoodie,
       amount: maxUint160,
       expiration: approvalExpiration,
     });
-    const permitAllowance = await publicClient.readContract({
-      address: getAddress(product.contracts.permit2),
-      abi: permit2Abi,
-      functionName: "allowance",
-      args: [buyer.address, hoodie, router],
-    });
+    const [
+      permitAllowance,
+      hoodiePermit2Allowance,
+      buyerHoodieBalance,
+      buyerChildBalance,
+      poolManagerChildBalance,
+      poolManagerHoodieBalance,
+      poolManagerExcluded,
+      hookExcluded,
+    ] = await Promise.all([
+      publicClient.readContract({
+        address: getAddress(product.contracts.permit2),
+        abi: permit2Abi,
+        functionName: "allowance",
+        args: [buyer.address, hoodie, router],
+      }),
+      publicClient.readContract({
+        address: hoodie,
+        abi: erc20Abi,
+        functionName: "allowance",
+        args: [buyer.address, getAddress(product.contracts.permit2)],
+      }),
+      publicClient.readContract({
+        address: hoodie,
+        abi: erc20Abi,
+        functionName: "balanceOf",
+        args: [buyer.address],
+      }),
+      tokenEntity.getBalanceOf(buyer.address),
+      tokenEntity.getBalanceOf(poolManager),
+      publicClient.readContract({
+        address: hoodie,
+        abi: erc20Abi,
+        functionName: "balanceOf",
+        args: [poolManager],
+      }),
+      tokenEntity.isExcludedFromBalanceLimit(poolManager),
+      tokenEntity.isExcludedFromBalanceLimit(
+        getAddress(childPoolKey.hooks),
+      ),
+    ]);
     addCheck(
       checks,
       "permit2-approval",
-      permitAllowance[0] >= firstQuote.amountIn &&
-        Number(permitAllowance[1]) >= approvalExpiration,
-      `allowance ${permitAllowance[0]}; expiry ${permitAllowance[1]}`,
+      hoodiePermit2Allowance >= firstQuote.amountIn &&
+        permitAllowance[0] >= firstQuote.amountIn &&
+        Number(permitAllowance[1]) >= approvalExpiration &&
+        buyerHoodieBalance >= firstQuote.amountIn,
+      `ERC20 ${hoodiePermit2Allowance}; Permit2 ${permitAllowance[0]}; ` +
+        `expiry ${permitAllowance[1]}; balance ${buyerHoodieBalance}`,
+    );
+    assert.equal(
+      buyerChildBalance,
+      0n,
+      "fork buyer must start without child tokens",
+    );
+    assert.ok(
+      firstInputQuote.amountOut <= V4_MAX_WALLET,
+      "first calibration buy quote exceeds the wallet cap",
+    );
+    assert.ok(
+      poolManagerChildBalance >= firstInputQuote.amountOut,
+      "PoolManager child-token custody is below the quoted output",
+    );
+    assert.ok(
+      poolManagerHoodieBalance > 0n,
+      "PoolManager has no HOODIE custody",
+    );
+    assert.ok(
+      poolManagerExcluded && hookExcluded,
+      "DopplerERC20V1 protocol balance-limit exclusions are incomplete",
+    );
+    process.stdout.write(
+      "Swap preflight passed: ERC20 approval, Permit2 allowance, custody, " +
+        "hook exclusions, and buyer wallet cap.\n",
     );
 
     const currentBlock = await publicClient.getBlock();
     const firstDeadline = currentBlock.timestamp + 3_600n;
+    const referenceProbeAmount = parseEther("1000000");
+    const referenceProbeQuote = await sdk.quoter.quoteExactInputV4Quoter({
+      poolKey: referencePoolKey,
+      zeroForOne:
+        hoodie.toLowerCase() === referencePoolKey.currency0.toLowerCase(),
+      exactAmount: referenceProbeAmount,
+      hookData: "0x",
+    });
+    assert.ok(
+      referenceProbeQuote.amountOut > 0n,
+      "known-live HOODIE/WETH V4 control quote returned zero",
+    );
+    await simulateRouterTransaction({
+      client: publicClient,
+      account: buyer.address,
+      data: encodeV4ExactInputSwap({
+        poolKey: referencePoolKey,
+        tokenIn: hoodie,
+        tokenOut: weth,
+        amountIn: referenceProbeAmount,
+        minimumOut: referenceProbeQuote.amountOut * 99n / 100n,
+        deadline: firstDeadline,
+      }),
+      labels: swapTraceLabels,
+    });
+    addCheck(
+      checks,
+      "uniswap-v4-router-control",
+      true,
+      `known-live HOODIE/WETH exact-input simulation returned ${referenceProbeQuote.amountOut} WETH`,
+    );
+    process.stdout.write(
+      "Known-live HOODIE/WETH Universal Router control simulation passed.\n",
+    );
     process.stdout.write("Executing direct HOODIE buy and wallet-cap checks...\n");
-    const firstBuyData = encodeV4ExactOutputSwap({
+    const firstMinimumOut = firstInputQuote.amountOut * 99n / 100n;
+    const firstBuyData = encodeV4ExactInputSwap({
       poolKey: childPoolKey,
       tokenIn: hoodie,
       tokenOut: token,
-      amountOut: firstTokens,
-      maximumIn: firstQuote.amountIn * 101n / 100n + 1n,
+      amountIn: firstQuote.amountIn,
+      minimumOut: firstMinimumOut,
       deadline: firstDeadline,
     });
     await sendRouterTransaction({
       client: publicClient,
       wallet: buyerWallet,
-      account: buyer.address,
+      account: buyer,
       data: firstBuyData,
+      labels: swapTraceLabels,
     });
+    const firstBalance = await tokenEntity.getBalanceOf(buyer.address);
     addCheck(
       checks,
       "direct-hoodie-buy",
-      await tokenEntity.getBalanceOf(buyer.address) === firstTokens,
-      `${firstTokens} received`,
+      firstBalance >= firstMinimumOut &&
+        firstBalance <= V4_MAX_WALLET,
+      `${firstBalance} received from exact-input swap`,
     );
 
-    const secondBuyData = encodeV4ExactOutputSwap({
+    const capCrossingTokens =
+      V4_MAX_WALLET - firstBalance + parseEther("1000000");
+    const capCrossingQuote = await sdk.quoter.quoteExactOutputV4Quoter({
+      poolKey: childPoolKey,
+      zeroForOne:
+        hoodie.toLowerCase() === childPoolKey.currency0.toLowerCase(),
+      exactAmount: capCrossingTokens,
+      hookData: "0x",
+    });
+    const capCrossingInputQuote = await sdk.quoter.quoteExactInputV4Quoter({
+      poolKey: childPoolKey,
+      zeroForOne:
+        hoodie.toLowerCase() === childPoolKey.currency0.toLowerCase(),
+      exactAmount: capCrossingQuote.amountIn,
+      hookData: "0x",
+    });
+    assert.ok(
+      firstBalance + capCrossingInputQuote.amountOut > V4_MAX_WALLET,
+      "calibration buys must cross the 2% maximum-wallet threshold",
+    );
+    const secondBuyData = encodeV4ExactInputSwap({
       poolKey: childPoolKey,
       tokenIn: hoodie,
       tokenOut: token,
-      amountOut: secondTokens,
-      maximumIn: secondQuote.amountIn * 101n / 100n + 1n,
+      amountIn: capCrossingQuote.amountIn,
+      minimumOut: capCrossingInputQuote.amountOut * 99n / 100n,
       deadline: firstDeadline,
     });
     let capRejected = false;
@@ -817,7 +1279,7 @@ async function main() {
       await sendRouterTransaction({
         client: publicClient,
         wallet: buyerWallet,
-        account: buyer.address,
+        account: buyer,
         data: secondBuyData,
       });
     } catch {
@@ -827,8 +1289,8 @@ async function main() {
       checks,
       "max-wallet-enforced",
       capRejected &&
-        await tokenEntity.getBalanceOf(buyer.address) === firstTokens,
-      "second buy rejected at 21M token balance",
+        await tokenEntity.getBalanceOf(buyer.address) === firstBalance,
+      "second exact-input buy rejected above the 2% balance limit",
     );
 
     await testClient.increaseTime({
@@ -836,24 +1298,24 @@ async function main() {
     });
     await testClient.mine({ blocks: 1 });
     const secondQuoteAfterExpiry =
-      await sdk.quoter.quoteExactOutputV4Quoter({
+      await sdk.quoter.quoteExactInputV4Quoter({
         poolKey: childPoolKey,
         zeroForOne:
           hoodie.toLowerCase() === childPoolKey.currency0.toLowerCase(),
-        exactAmount: secondTokens,
+        exactAmount: capCrossingQuote.amountIn,
         hookData: "0x",
       });
     const afterExpiryBlock = await publicClient.getBlock();
     await sendRouterTransaction({
       client: publicClient,
       wallet: buyerWallet,
-      account: buyer.address,
-      data: encodeV4ExactOutputSwap({
+      account: buyer,
+      data: encodeV4ExactInputSwap({
         poolKey: childPoolKey,
         tokenIn: hoodie,
         tokenOut: token,
-        amountOut: secondTokens,
-        maximumIn: secondQuoteAfterExpiry.amountIn * 101n / 100n + 1n,
+        amountIn: capCrossingQuote.amountIn,
+        minimumOut: secondQuoteAfterExpiry.amountOut * 99n / 100n,
         deadline: afterExpiryBlock.timestamp + 3_600n,
       }),
     });
@@ -861,7 +1323,9 @@ async function main() {
     addCheck(
       checks,
       "max-wallet-expired",
-      balanceAfterExpiry === firstTokens + secondTokens &&
+      balanceAfterExpiry > V4_MAX_WALLET &&
+        balanceAfterExpiry >=
+          firstBalance + secondQuoteAfterExpiry.amountOut * 99n / 100n &&
         !(await tokenEntity.isBalanceLimitActive()),
       balanceAfterExpiry.toString(),
     );
@@ -869,7 +1333,7 @@ async function main() {
     await approvePermit2({
       client: publicClient,
       wallet: buyerWallet,
-      account: buyer.address,
+      account: buyer,
       token,
       amount: maxUint160,
       expiration: approvalExpiration,
@@ -884,7 +1348,7 @@ async function main() {
     await sendRouterTransaction({
       client: publicClient,
       wallet: buyerWallet,
-      account: buyer.address,
+      account: buyer,
       data: encodeV4ExactInputSwap({
         poolKey: childPoolKey,
         tokenIn: token,
@@ -907,7 +1371,7 @@ async function main() {
       await sendRouterTransaction({
         client: publicClient,
         wallet: buyerWallet,
-        account: buyer.address,
+        account: buyer,
         data: encodeV4ExactInputSwap({
           poolKey: childPoolKey,
           tokenIn: token,
@@ -932,7 +1396,7 @@ async function main() {
       await sendRouterTransaction({
         client: publicClient,
         wallet: buyerWallet,
-        account: buyer.address,
+        account: buyer,
         data: encodeV4ExactInputSwap({
           poolKey: childPoolKey,
           tokenIn: token,
@@ -973,7 +1437,7 @@ async function main() {
     const nativeBuyReceipt = await sendRouterTransaction({
       client: publicClient,
       wallet: buyerWallet,
-      account: buyer.address,
+      account: buyer,
       value: nativeInput,
       data: encodeV4EthToChildSwap({
         referencePoolKey,
@@ -1013,7 +1477,7 @@ async function main() {
     const nativeSellReceipt = await sendRouterTransaction({
       client: publicClient,
       wallet: buyerWallet,
-      account: buyer.address,
+      account: buyer,
       data: encodeV4ChildToEthSwap({
         childPoolKey,
         referencePoolKey,
@@ -1052,14 +1516,6 @@ async function main() {
     );
 
     process.stdout.write("Collecting and validating V4 80/15/5 fees...\n");
-    const creatorPending = await pool.getPendingFees(creator.address);
-    addCheck(
-      checks,
-      "creator-pending-fees",
-      creatorPending.fees0 > 0n || creatorPending.fees1 > 0n,
-      `${creatorPending.fees0}/${creatorPending.fees1}`,
-    );
-
     const beneficiaryAccounts = [
       creator.address,
       getAddress(product.contracts.hoodieEcosystemSafe),
@@ -1089,13 +1545,6 @@ async function main() {
       account: creator.address,
       token,
     });
-    addCheck(
-      checks,
-      "creator-fee-claim",
-      creatorClaim.before.fees0 > 0n ||
-        creatorClaim.before.fees1 > 0n,
-      "creator collectFees succeeded",
-    );
 
     const impersonated = [
       getAddress(product.contracts.hoodieEcosystemSafe),
@@ -1126,6 +1575,18 @@ async function main() {
     );
     const hoodieDeltas = afterClaims.map(
       (balance, index) => balance.hoodie - beforeClaims[index].hoodie,
+    );
+    addCheck(
+      checks,
+      "creator-pending-fees",
+      creatorClaim.fees0 > 0n || creatorClaim.fees1 > 0n,
+      `collectFees preview ${creatorClaim.fees0}/${creatorClaim.fees1}`,
+    );
+    addCheck(
+      checks,
+      "creator-fee-claim",
+      tokenDeltas[0] > 0n || hoodieDeltas[0] > 0n,
+      `${tokenDeltas[0]}/${hoodieDeltas[0]}`,
     );
     addCheck(
       checks,
